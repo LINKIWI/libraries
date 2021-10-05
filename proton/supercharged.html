@@ -1,1 +1,67 @@
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://pkg.go.dev/lib.kevinlin.info/proton"><meta name="go-import" content="lib.kevinlin.info/proton mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/proton https://git.kevinlin.info/personal/proton https://git.kevinlin.info/personal/proton/tree/master/{dir} https://git.kevinlin.info/personal/proton/blob/master/{dir}/{file}#L{line}"></head></html>
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/proton mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/proton https://git.kevinlin.info/personal/proton https://git.kevinlin.info/personal/proton/tree/master/{dir} https://git.kevinlin.info/personal/proton/blob/master/{dir}/{file}#L{line}"></head><body><pre>// Package supercharged contains Supercharged protocol data structures and usage abstractions.
+package supercharged // import &#34;lib.kevinlin.info/proton/supercharged&#34;
+
+
+CONSTANTS
+
+const (
+	// CodeOK describes a successful response.
+	CodeOK = 0
+	// CodeServerUndefined describes an undefined server-side error.
+	CodeServerUndefined = -1
+	// CodeClientUndefined describes an undefined client-side error.
+	CodeClientUndefined = -2
+	// CodeInvalidParameters indicates the client supplied invalid input parameters.
+	CodeInvalidParameters = -3
+	// CodeNotFound indicates the client attempted to access an unknown route.
+	CodeNotFound = -4
+)
+
+
+TYPES
+
+// Error includes additional metadata for a Supercharged error response.
+type Error struct {
+	Status  int
+	Code    int
+	Message string
+	Data    interface{}
+}
+
+// Request formalizes the fields for a canonical Supercharged request.
+type Request struct {
+	BaseURL  *url.URL
+	Client   string
+	Version  string
+	Method   string
+	Endpoint string
+	Data     interface{}
+}
+
+// Response formalizes a canonical Supercharged JSON response body.
+type Response struct {
+	Success bool            `json:&#34;success&#34;`
+	Code    int             `json:&#34;code&#34;`
+	Message string          `json:&#34;message&#34;`
+	Data    json.RawMessage `json:&#34;data&#34;`
+}
+
+
+FUNCTIONS
+
+// WrapError wraps an error with default fields to conform to an Error struct.
+func WrapError(err error) *Error
+
+// Error returns a string representation of the error.
+func (e *Error) Error() string
+
+// HTTPRequest creates an *http.Request from a Supercharged request descriptor.
+func (r *Request) HTTPRequest() (*http.Request, error)
+
+// WebsocketURL creates a *url.URL target suitable for websocket connections from a Supercharged
+// request descriptor.
+func (r *Request) WebsocketURL() (*url.URL, error)
+
+// ParseResponse is a convenience function for parsing a Supercharged JSON-serialized body into a
+// Response struct.
+func ParseResponse(data []byte) (*Response, error)</pre></body></html>

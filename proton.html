@@ -1,1 +1,60 @@
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://pkg.go.dev/lib.kevinlin.info/proton"><meta name="go-import" content="lib.kevinlin.info/proton mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/proton https://git.kevinlin.info/personal/proton https://git.kevinlin.info/personal/proton/tree/master/{dir} https://git.kevinlin.info/personal/proton/blob/master/{dir}/{file}#L{line}"></head></html>
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/proton mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/proton https://git.kevinlin.info/personal/proton https://git.kevinlin.info/personal/proton/tree/master/{dir} https://git.kevinlin.info/personal/proton/blob/master/{dir}/{file}#L{line}"></head><body><pre>// Package proton defines clients, constants, and network abstractions for transacting with an HTTP
+// server that is API-compliant with Supercharged conventions.
+package proton // import &#34;lib.kevinlin.info/proton&#34;
+
+
+TYPES
+
+// Client is a Supercharged client that transacts requests and responses over HTTP.
+type Client struct {
+	cfg *Config
+}
+
+// Config describes parameters for creating a Proton Supercharged client.
+// 
+// Most clients should use the NewConfig function in order to assign proper defaults and perform
+// automatic parameter validation:
+// 
+// 	cfg, err := proton.NewConfig(&amp;proton.Config{BaseURL: ...})
+// 	if err != nil { ... }
+type Config struct {
+	// BaseURL points to the URL of the Supercharged HTTP server.
+	BaseURL *url.URL
+
+	// ClientID is an optional client identifier attached to all outgoing requests. When
+	// omitted, a default Proton client identifier is used.
+	ClientID string
+
+	// ClientVersion is an optional string describing the client application version attached to
+	// all outgoing requests.
+	ClientVersion string
+
+	// Backend is an *http.Client backend to use for making requests. When omitted, the default
+	// globally shared net/http client is used.
+	Backend *http.Client
+
+	// Metrics is an optional aperture.Statsd implementation used for emitting metrics for all
+	// outgoing requests. When omitted, instrumentation features are disabled.
+	Metrics aperture.Statsd
+
+	// Logger is an optional *log.Logger standard library logger for logging internal library
+	// events, including request/response lifecycles.
+	Logger *log.Logger
+}
+
+
+FUNCTIONS
+
+// NewClient creates a new client instance for a Supercharged-compliant HTTP server, with an
+// optional http.Client backend for initiating requests.
+func NewClient(cfg *Config) *Client
+
+// DoHTTP executes an HTTP request against the server.
+func (c *Client) DoHTTP(method string, endpoint string, data interface{}, response interface{}) (scErr *supercharged.Error)
+
+// DoWebsocket establishes a duplex websocket connection with the server.
+func (c *Client) DoWebsocket(endpoint string, data interface{}) (conn *websocket.Conn, scErr *supercharged.Error)
+
+// NewConfig creates a Config with proper defaults assigned for omitted configuration parameters.
+// An error is returned for any configuration validation errors.
+func NewConfig(cfg *Config) (*Config, error)</pre></body></html>
