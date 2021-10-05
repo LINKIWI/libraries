@@ -1,1 +1,202 @@
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://pkg.go.dev/lib.kevinlin.info/aperture"><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head></html>
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head><body><pre>// Package transport provides networking abstractions for unidirectional transports capable of
+// sending arbitrary binary message payloads over the wire.
+package transport // import &#34;lib.kevinlin.info/aperture/transport&#34;
+
+
+TYPES
+
+// Buffered is an abstraction over a Transport that internally buffers the transmission of
+// individual payloads with a configurable batch size.
+type Buffered struct {
+	buf chan []byte
+	Transport
+}
+
+// Composite is an abstraction over multiple Transports that allows concurrent writes to multiple
+// transports on each send.
+type Composite struct {
+	consistency writeConsistencyLevel
+	backends    []Transport
+}
+
+// Factory is a type alias for a lazy provider of a Transport backend.
+type Factory func() (Transport, error)
+
+// File is a Transport for writing bytes to a file on disk.
+type File struct {
+	file *os.File
+}
+
+// Framed is an abstraction over a Transport that simulates message framing appending a constant
+// tailer sequence to every outgoing message.
+type Framed struct {
+	tailer []byte
+	Transport
+}
+
+// Lazy is an abstraction over a Transport that initializes the underlying transport only when the
+// client attempts to make its first transmission, rather than at construction time.
+type Lazy struct {
+	backendFactory Factory
+	mutex          sync.Mutex
+	Transport
+}
+
+// Noop is a Transport interface-compliant implementation that noops on all operations.
+// It is intended to be used as a placeholder implementation when no real transport is available.
+type Noop struct{}
+
+// Reconnecting is an thread-safe abstraction over a Transport that transparently attempts to
+// reestablish connections to the underlying transport at regular intervals if the transmission
+// error count exceeds a defined threshold.
+type Reconnecting struct {
+	backendFactory Factory
+	duration       time.Duration
+	threshold      int64
+	signal         chan bool
+	errs           int64
+	mutex          sync.Mutex
+	Transport
+}
+
+// TCP is a Transport for transmitting bytes to a TCP address.
+type TCP struct {
+	conn net.Conn
+	cfg  TCPSocketConfig
+}
+
+// TCPSocketConfig provides configuration parameters for the underlying TCP socket.
+type TCPSocketConfig struct {
+	ConnectTimeout    time.Duration
+	SendTimeout       time.Duration
+	KeepAliveInterval time.Duration
+}
+
+// Transport provides the interface for any underlying unidirectional network transport for shipping
+// arbitrary data.
+type Transport interface {
+	// Send a payload with the transport, returning the number of bytes written.
+	Send(data []byte) (int, error)
+
+	// Close the transport.
+	Close() error
+}
+
+// UDP is a Transport for transmitting datagrams to a UDP address.
+type UDP struct {
+	conn *net.UDPConn
+}
+
+// UDS is a Transport for transmitting datagrams to a Unix datagram socket.
+type UDS struct {
+	conn *net.UnixConn
+}
+
+
+FUNCTIONS
+
+// Close flushes all remaining queued payloads and closes the backing transport.
+func (t *Buffered) Close() error
+
+// Send asynchronously queues the payload for transmission. If the queue size has reached the batch
+// size, all queued payloads are flushed.
+func (t *Buffered) Send(data []byte) (int, error)
+
+// Close attempts to close all underlying transports, accumulating errors for individual failed
+// closures.
+func (t *Composite) Close() error
+
+// Send concurrently dispatches the data payload to all transport backends and blocks until the
+// desired write consistency level is satisfied. Note that, due to the concurrent nature of the
+// composite write, the number of sent bytes should be considered meaningless regardless of the
+// desired write consistency level.
+func (t *Composite) Send(data []byte) (int, error)
+
+// Close closes the underlying file&#39;s file descriptor.
+func (t *File) Close() error
+
+// Send writes a chunk of data to the end of the file.
+func (t *File) Send(data []byte) (int, error)
+
+// Send appends the constant binary tailer sequence to the message and dispatches the write request
+// to the underlying transport. Note that this assumes that every Send invocation corresponds to a
+// fully formed &#34;message&#34; in the protocol leveraging this transport.
+func (t *Framed) Send(message []byte) (int, error)
+
+// Close defers to the underlying transport implementation, if initialized, to close the transport.
+func (t *Lazy) Close() error
+
+// Send idempotently initializes the underlying transport, followed by using the transport to send
+// the requested data.
+func (t *Lazy) Send(data []byte) (int, error)
+
+// Close noops.
+func (t *Noop) Close() error
+
+// Send noops.
+func (t *Noop) Send(data []byte) (int, error)
+
+// Close defers to the underlying transport to close the transport. It also requests a graceful stop
+// to the internal ticker for evaluating the current transport error count.
+func (t *Reconnecting) Close() error
+
+// Send defers to the underlying transport to transmit the data. Internally, the number of send
+// errors from the backing transport is atomically tracked for evaluation in an asynchronous check
+// path. Note that failed writes are silently ignored (considered lost) and not buffered for retry.
+func (t *Reconnecting) Send(data []byte) (int, error)
+
+// Close closes the underlying TCP socket.
+func (t *TCP) Close() error
+
+// Send initiates a reliable transmission of an arbitrary payload, respecting timeout parameters.
+func (t *TCP) Send(data []byte) (int, error)
+
+// NewBuffered creates a new buffered transport over an existing Transport backend.
+func NewBuffered(backendFactory Factory, size int) (Transport, error)
+
+// NewComposite create a new composite transport over multiple existing Transport backends.
+func NewComposite(backendFactories []Factory, consistency writeConsistencyLevel) (Transport, error)
+
+// NewDirectTCP establishes a TCP transport client against the target address directly.
+func NewDirectTCP(addr string, cfg TCPSocketConfig) (Transport, error)
+
+// NewFile creates a File transport for a target file path on disk.
+// The file is opened in append mode, and will be created if it does not already exist.
+func NewFile(path string) (Transport, error)
+
+// NewFramed creates a new framed transport over an existing Transport backend.
+func NewFramed(backendFactory Factory, tailer []byte) (Transport, error)
+
+// NewLazy creates a Transport that lazily initializes the underlying network transport client.
+func NewLazy(backendFactory Factory) (Transport, error)
+
+// NewNoop creates a new Noop transport.
+func NewNoop() Transport
+
+// NewProxiedTCP establishes a TCP transport client against the target address via an intermediate
+// SOCKS5 proxy server.
+func NewProxiedTCP(addr string, proxyNet string, proxyAddr string, cfg TCPSocketConfig) (Transport, error)
+
+// NewReconnecting creates an automatically reconnecting transport over an existing transport
+// backend. Note that it is expected that the callee supply a transport factory that may be invoked
+// lazily, since the client will reestablish connections by simply closing the existing transport
+// and creating a new one.
+func NewReconnecting(backendFactory Factory, duration time.Duration, threshold int64) (Transport, error)
+
+// NewUDP creates a UDP transport for a target address.
+func NewUDP(addr string) (Transport, error)
+
+// NewUDS creates a Unix datagram socket transport for a a Unix socket at the target disk path.
+func NewUDS(path string) (Transport, error)
+
+// Close closes the underlying UDP socket.
+func (t *UDP) Close() error
+
+// Send initiates a fire-and-forget transmission of an arbitrary payload.
+func (t *UDP) Send(data []byte) (int, error)
+
+// Close closes the underlying UDP socket.
+func (t *UDS) Close() error
+
+// Send initiates a fire-and-forget transmission of an arbitrary payload.
+func (t *UDS) Send(data []byte) (int, error)</pre></body></html>

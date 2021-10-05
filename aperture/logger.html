@@ -1,1 +1,63 @@
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://pkg.go.dev/lib.kevinlin.info/aperture"><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head></html>
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head><body><pre>// Package logger provides abstractions for logging metrics emissions.
+package logger // import &#34;lib.kevinlin.info/aperture/logger&#34;
+
+
+TYPES
+
+// Console is a Logger that logs outgoing metrics to the console via standard output.
+type Console struct {
+	prefix     string
+	serializer protocol.LineSerializer
+}
+
+// Logger provides interfaces for logging outgoing metrics.
+type Logger interface {
+	// LogGauge logs the emission of a gauge.
+	LogGauge(gauge *protocol.Gauge)
+
+	// LogCounter logs the emission of a counter.
+	LogCounter(counter *protocol.Counter)
+
+	// LogTimer logs the emission of a timer.
+	LogTimer(timer *protocol.Timer)
+
+	// LogHistogram logs the emission of a histogram.
+	LogHistogram(histogram *protocol.Histogram)
+}
+
+// Noop is a Logger that noops for all metric logs.
+type Noop struct{}
+
+
+FUNCTIONS
+
+// LogCounter logs a human-consumable representation of a counter to the console.
+func (l *Console) LogCounter(counter *protocol.Counter)
+
+// LogGauge logs a human-consumable representation of a gauge to the console.
+func (l *Console) LogGauge(gauge *protocol.Gauge)
+
+// LogHistogram logs a human-consumable representation of a histogram to the console.
+func (l *Console) LogHistogram(histogram *protocol.Histogram)
+
+// LogTimer logs a human-consumable representation of a timer to the console.
+func (l *Console) LogTimer(timer *protocol.Timer)
+
+// NewConsole creates a console metrics logger with default runtime parameters. All log statements
+// are produced by the debug line serializer.
+func NewConsole() Logger
+
+// NewNoop creates a new default Noop logger.
+func NewNoop() Logger
+
+// LogCounter noops.
+func (l *Noop) LogCounter(counter *protocol.Counter)
+
+// LogGauge noops.
+func (l *Noop) LogGauge(gauge *protocol.Gauge)
+
+// LogHistogram noops.
+func (l *Noop) LogHistogram(histogram *protocol.Histogram)
+
+// LogTimer noops.
+func (l *Noop) LogTimer(timer *protocol.Timer)</pre></body></html>

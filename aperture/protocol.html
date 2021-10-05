@@ -1,1 +1,128 @@
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://pkg.go.dev/lib.kevinlin.info/aperture"><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head></html>
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head><body><pre>// Package protocol defines constants and structs related to the statsd protocol specification. It
+// additionally provides implementations of logic layers for creating protocol-compliant data
+// payloads.
+package protocol // import &#34;lib.kevinlin.info/aperture/protocol&#34;
+
+
+VARIABLES
+
+var (
+	// DefaultStatsdLineSerializer is a statsd protocol LineSerializer implementation that uses
+	// default tag delimiters and joiners. The default delimiters are compatible with InfluxDB.
+	DefaultStatsdLineSerializer = NewStatsdLineSerializer(defaultTagDelimiter, defaultTagJoiner)
+	// DefaultInfluxLineSerializer is an InfluxDB line protocol LineSerializer implementation.
+	DefaultInfluxLineSerializer = NewInfluxLineSerializer()
+)
+
+
+TYPES
+
+// Counter is a statsd counter metric.
+type Counter struct {
+	Timestamp  time.Time
+	Name       string
+	Value      int64
+	SampleRate float64
+	Tags       map[string]string
+}
+
+// DebugLineSerializer is a LineSerializer that produces human-consumable lines summarizing each
+// metric&#39;s parameters for purposes of debugging.
+type DebugLineSerializer struct{}
+
+// Gauge is a statsd gauge metric.
+type Gauge struct {
+	Timestamp time.Time
+	Name      string
+	Value     float64
+	Tags      map[string]string
+}
+
+// Histogram is a statsd histogram metric.
+type Histogram struct {
+	Timestamp time.Time
+	Name      string
+	Value     float64
+	Tags      map[string]string
+}
+
+// InfluxLineSerializer implements LineSerializer for the InfluxDB line protocol.
+type InfluxLineSerializer struct{}
+
+// LineSerializer describes a protocol serializer for various metric types.
+type LineSerializer interface {
+	// SerializeGauge serializes a Gauge to a protocol-compliant line.
+	SerializeGauge(gauge *Gauge) (string, error)
+
+	// SerializeCounter serializes a Counter to a protocol-compliant line.
+	SerializeCounter(counter *Counter) (string, error)
+
+	// SerializeTimer serializes a Timer to a protocol-compliant line.
+	SerializeTimer(timer *Timer) (string, error)
+
+	// SerializeHistogram serializes a Histogram to a protocol-compliant line.
+	SerializeHistogram(histogram *Histogram) (string, error)
+}
+
+// StatsdLineSerializer implements LineSerializer for the statsd protocol.
+type StatsdLineSerializer struct {
+	tagDelimiter string
+	tagJoiner    string
+}
+
+// Timer is a statsd timing metric.
+type Timer struct {
+	Timestamp  time.Time
+	Name       string
+	Value      float64
+	SampleRate float64
+	Tags       map[string]string
+}
+
+
+FUNCTIONS
+
+// SerializeCounter serializes a statsd counter.
+func (s *DebugLineSerializer) SerializeCounter(counter *Counter) (string, error)
+
+// SerializeGauge serializes a statsd gauge.
+func (s *DebugLineSerializer) SerializeGauge(gauge *Gauge) (string, error)
+
+// SerializeHistogram serializes a statsd histogram.
+func (s *DebugLineSerializer) SerializeHistogram(histogram *Histogram) (string, error)
+
+// SerializeTimer serializes a statsd timer.
+func (s *DebugLineSerializer) SerializeTimer(timer *Timer) (string, error)
+
+// SerializeCounter serializes a statsd counter.
+func (i *InfluxLineSerializer) SerializeCounter(counter *Counter) (string, error)
+
+// SerializeGauge serializes a statsd gauge.
+func (i *InfluxLineSerializer) SerializeGauge(gauge *Gauge) (string, error)
+
+// SerializeHistogram serializes a statsd histogram.
+func (i *InfluxLineSerializer) SerializeHistogram(histogram *Histogram) (string, error)
+
+// SerializeTimer serializes a statsd timer.
+func (i *InfluxLineSerializer) SerializeTimer(timer *Timer) (string, error)
+
+// NewDebugLineSerializer creates a new debugging line serializer.
+func NewDebugLineSerializer() LineSerializer
+
+// NewInfluxLineSerializer creates a InfluxDB line protocol serializer.
+func NewInfluxLineSerializer() LineSerializer
+
+// NewStatsdLineSerializer creates a statsd line serializer with custom serialization options.
+func NewStatsdLineSerializer(tagDelimiter string, tagJoiner string) LineSerializer
+
+// SerializeCounter serializes a statsd counter.
+func (s *StatsdLineSerializer) SerializeCounter(counter *Counter) (string, error)
+
+// SerializeGauge serializes a statsd gauge.
+func (s *StatsdLineSerializer) SerializeGauge(gauge *Gauge) (string, error)
+
+// SerializeHistogram serializes a statsd histogram.
+func (s *StatsdLineSerializer) SerializeHistogram(histogram *Histogram) (string, error)
+
+// SerializeTimer serializes a statsd timer.
+func (s *StatsdLineSerializer) SerializeTimer(timer *Timer) (string, error)</pre></body></html>

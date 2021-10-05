@@ -1,1 +1,103 @@
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://pkg.go.dev/lib.kevinlin.info/aperture"><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head></html>
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head><body><pre>// Package lib provides general-purpose instrumentation utilities, intended to be consumed by
+// library clients.
+package lib // import &#34;lib.kevinlin.info/aperture/lib&#34;
+
+
+TYPES
+
+// AsyncStatsd wraps a Statsd implementation to write all metrics asynchronously.
+type AsyncStatsd struct {
+	aperture.Statsd
+}
+
+// NoopStatsd implements the Statsd interface but noops on all APIs.
+type NoopStatsd struct{}
+
+// Stopwatch reports elapsed time.
+type Stopwatch struct {
+	start    time.Time
+	delta    time.Duration
+	state    stopwatchState
+	provider timeProvider
+}
+
+
+FUNCTIONS
+
+// NewAsyncStatsd creates an AsyncStatsd wrapping an existing Statsd implementation.
+// Note that, due to the asynchronous nature of the client, write errors are not surfaced; all APIs
+// return a nil error even if an error occurs internally.
+func NewAsyncStatsd(statsd aperture.Statsd) *AsyncStatsd
+
+// Count invokes the underlying Count in a goroutine.
+func (a *AsyncStatsd) Count(name string, delta int64, tags map[string]interface{}) error
+
+// Decr invokes the underlying Decr in a goroutine.
+func (a *AsyncStatsd) Decr(name string, tags map[string]interface{}) error
+
+// Gauge invokes the underlying Decr in a goroutine.
+func (a *AsyncStatsd) Gauge(name string, value float64, tags map[string]interface{}) error
+
+// Histogram invokes the underlying Histogram in a goroutine.
+func (a *AsyncStatsd) Histogram(name string, value float64, tags map[string]interface{}) error
+
+// Incr invokes the underlying Incr in a goroutine.
+func (a *AsyncStatsd) Incr(name string, tags map[string]interface{}) error
+
+// Size invokes the underlying Size in a goroutine.
+func (a *AsyncStatsd) Size(name string, bytes int64, tags map[string]interface{}) error
+
+// Timing invokes the underlying Timing in a goroutine.
+func (a *AsyncStatsd) Timing(name string, duration time.Duration, tags map[string]interface{}) error
+
+// TimingMs invokes the underlying TimingMs in a goroutine.
+func (a *AsyncStatsd) TimingMs(name string, duration float64, tags map[string]interface{}) error
+
+// NewNoopStatsd is a convenience function for creating a NoopStatsd.
+func NewNoopStatsd() *NoopStatsd
+
+// Close is a noop.
+func (n *NoopStatsd) Close() error
+
+// Count is a noop.
+func (n *NoopStatsd) Count(name string, delta int64, tags map[string]interface{}) error
+
+// Decr is a noop.
+func (n *NoopStatsd) Decr(name string, tags map[string]interface{}) error
+
+// Gauge is a noop.
+func (n *NoopStatsd) Gauge(name string, value float64, tags map[string]interface{}) error
+
+// Histogram is a noop.
+func (n *NoopStatsd) Histogram(name string, value float64, tags map[string]interface{}) error
+
+// Incr is a noop.
+func (n *NoopStatsd) Incr(name string, tags map[string]interface{}) error
+
+// Size is a noop.
+func (n *NoopStatsd) Size(name string, bytes int64, tags map[string]interface{}) error
+
+// Timing is a noop.
+func (n *NoopStatsd) Timing(name string, duration time.Duration, tags map[string]interface{}) error
+
+// TimingMs is a noop.
+func (n *NoopStatsd) TimingMs(name string, duration float64, tags map[string]interface{}) error
+
+// NewStopwatch creates a stopwatch instance. Note that the stopwatch is started on instantiation.
+func NewStopwatch() *Stopwatch
+
+// Elapsed returns a time.Duration indicating the amount of time that has elapsed since the
+// stopwatch was started.
+func (s *Stopwatch) Elapsed() time.Duration
+
+// Pause pauses the stopwatch; all future Elapsed invocations are expected to return the same
+// duration. Pause is an idempotent operation.
+func (s *Stopwatch) Pause()
+
+// Reset resets the stopwatch; all future Elapsed invocations will report durations as if they had
+// been started at the time Reset was invoked. Note that Reset does not create a state transition;
+// the stopwatch must be manually started again if it is in a paused state.
+func (s *Stopwatch) Reset()
+
+// Start starts the stopwatch. Start is an idempotent operation.
+func (s *Stopwatch) Start()</pre></body></html>

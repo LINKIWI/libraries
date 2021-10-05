@@ -1,1 +1,151 @@
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://pkg.go.dev/lib.kevinlin.info/aperture"><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head></html>
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/aperture mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/aperture https://git.kevinlin.info/personal/aperture https://git.kevinlin.info/personal/aperture/tree/master/{dir} https://git.kevinlin.info/personal/aperture/blob/master/{dir}/{file}#L{line}"></head><body><pre>// Package aperture provides a statsd client library with native tags integration, support for
+// multiple underlying network transports, configurable buffering/batching behavior, and more.
+// By default, Aperture implements the statsd protocol, but can be extended by the client to support
+// any protocol (including non-standard statsd specifications) that shares the same metric types
+// (gauges, counters, timers, and histograms).
+package aperture // import &#34;lib.kevinlin.info/aperture&#34;
+
+
+TYPES
+
+// Client is the Aperture implementation of a statsd client.
+type Client struct {
+	cfg   *Config
+	tport transport.Transport
+}
+
+// Config is the client-specified configuration for the statsd client.
+type Config struct {
+	// URI describing the statsd endpoint. Supported schemes are &#34;udp&#34;, &#34;tcp&#34;, &#34;unix&#34;, and
+	// &#34;file&#34; for UDP, TCP, UDS (Unix datagram socket), and local disk file transports,
+	// respectively. A UDP or TCP transport should specify the network address, a Unix socket
+	// transport should specify the path to a socket file, and a file transport should specify
+	// the path to a preexisting or nonexistent file on disk.
+	//
+	// Multiple addresses may be specified, delimited by a comma, to indicate use of a
+	// composite transport that will concurrently write metrics to all addresses. By default,
+	// the composite transport operates at the strongest write consistency level; it waits until
+	// all writes have completed and will consider the metric emission to have failed if any of
+	// the underlying transports fail.
+	//
+	// For example:
+	// A UDP transport should be shaped as &#34;udp://localhost:8125&#34;.
+	// A TCP transport should be shaped as &#34;tcp://localhost:8125&#34;.
+	// A UDS transport should be shaped as &#34;unix:///var/run/metrics/statsd.sock&#34;.
+	// A file transport should be shaped as &#34;file:///var/log/metrics/statsd.log&#34;.
+	// A composite transport that writes to multiple addresses may be shaped as
+	// &#34;udp://localhost:8125,tcp://localhost:8125,file:///var/log/metrics/statsd.log&#34;.
+	Address string
+
+	// Prefix to prepend to all emitted metrics.
+	Prefix string
+
+	// Suffix to append to all emitted metrics.
+	Suffix string
+
+	// Set of defaults tags to include on all emitted metrics.
+	DefaultTags map[string]interface{}
+
+	// Sample rate to share across all metric emissions for which sampling is supported.
+	SampleRate float64
+
+	// Used for buffering metric emissions. When non-negative, a buffered transport is used that
+	// batches sending of metrics once the threshold queue size has been reached. When zero or
+	// negative, buffering is disabled; each metric is sent over the transport immediately.
+	BufferSize int
+
+	// URI describing the address of a SOCKS5 proxy server through which the transport should be
+	// established. Supported schemes are &#34;tcp&#34; and &#34;unix&#34; for TCP and Unix domain socket proxy
+	// server listeners, respectively.
+	//
+	// Only statsd emissions through TCP transports support use of a proxy server; this setting
+	// is ignored for all other transport types. When omitted, no proxy is used.
+	Proxy string
+
+	// Used for automatic and asynchronous connection reestablishment to the network transport
+	// on metric emission errors. When nonzero, this duration defines the interval at which the
+	// current transport&#39;s connection may be reestablished if the number of transmission errors
+	// accumulated in the current window is nonzero. When zero, health probing of the network
+	// transport is disabled at the library layer, and it is the responsibility of the client
+	// application to reestablish a new instance as needed in response to write errors.
+	TransportProbeInterval time.Duration
+
+	// Requested time interval between keepalive probes for the underlying connection, relevant
+	// only when using a reliable transport (i.e. TCP) with support from the underlying OS. When
+	// zero or negative, keepalive probes are disabled.
+	TransportKeepaliveInterval time.Duration
+
+	// Absolute timeout for establishing/dialing a new connection, relevant only when using a
+	// reliable transport (i.e. TCP). When zero, no application-layer timeout is applied.
+	TransportConnectTimeout time.Duration
+
+	// Absolute timeout for individual payload transmissions over the network, relevant only
+	// when using a reliable transport (i.e. TCP). When zero, no application-layer transmission
+	// timeout is applied.
+	TransportSendTimeout time.Duration
+
+	// Initialize the backing transport lazily on the first metric emission instead of eagerly
+	// on client initialization. This has the effect of potentially masking transport errors
+	// until late into the application lifecycle, though this may be desirable when using a
+	// reliable transport (e.g. TCP or UDS) to eliminate the requirement that the backend be
+	// available before the client is initialized. It is recommended that this option be used in
+	// conjunction with active transport probing.
+	LazyTransportInitialization bool
+
+	// Specify a metrics logger used for logging all metrics emitted by this client. When
+	// omitted, a noop logger is used, which effectively disables any logging.
+	Logger logger.Logger
+
+	// Override the line protocol serializer implementation. This can be used, for example, to
+	// use a custom tags serialization mechanism, or to conform to a different metrics protocol
+	// that shares statsd metric types. When omitted, the default statsd serializer is used.
+	Serializer protocol.LineSerializer
+}
+
+// Statsd is an interface for a client providing metrics reporting to a statsd backend.
+type Statsd interface {
+	Count(name string, delta int64, tags map[string]interface{}) error
+	Incr(name string, tags map[string]interface{}) error
+	Decr(name string, tags map[string]interface{}) error
+	Gauge(name string, value float64, tags map[string]interface{}) error
+	Size(name string, bytes int64, tags map[string]interface{}) error
+	Timing(name string, duration time.Duration, tags map[string]interface{}) error
+	TimingMs(name string, duration float64, tags map[string]interface{}) error
+	Histogram(name string, value float64, tags map[string]interface{}) error
+	Close() error
+}
+
+
+FUNCTIONS
+
+// NewClient creates a client with the specified configuration.
+func NewClient(cfg *Config) (*Client, error)
+
+// Close closes the underlying network transport.
+func (s *Client) Close() error
+
+// Count emits a counter metric.
+func (s *Client) Count(name string, delta int64, tags map[string]interface{}) error
+
+// Decr is a convenience method for emitting a counter with value -1.
+func (s *Client) Decr(name string, tags map[string]interface{}) error
+
+// Gauge emits a gauge metric.
+func (s *Client) Gauge(name string, value float64, tags map[string]interface{}) error
+
+// Histogram emits a histogram metric.
+func (s *Client) Histogram(name string, value float64, tags map[string]interface{}) error
+
+// Incr is a convenience method for emitting a counter with value 1.
+func (s *Client) Incr(name string, tags map[string]interface{}) error
+
+// Size is used to describe the size of a payload in byte units. In practice, this is merely an
+// alias for emitting a timer metric.
+func (s *Client) Size(name string, bytes int64, tags map[string]interface{}) error
+
+// Timing is a convenience method for emitting a timer with a duration specified as type
+// time.Duration.
+func (s *Client) Timing(name string, duration time.Duration, tags map[string]interface{}) error
+
+// TimingMs emits a timer metric for a duration in milliseconds.
+func (s *Client) TimingMs(name string, duration float64, tags map[string]interface{}) error</pre></body></html>
