@@ -1,1 +1,1002 @@
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://pkg.go.dev/lib.kevinlin.info/external/go-git"><meta name="go-import" content="lib.kevinlin.info/external/go-git mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/external/go-git https://git.kevinlin.info/external/go-git https://git.kevinlin.info/external/go-git/tree/master/{dir} https://git.kevinlin.info/external/go-git/blob/master/{dir}/{file}#L{line}"></head></html>
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/external/go-git mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/external/go-git https://git.kevinlin.info/external/go-git https://git.kevinlin.info/external/go-git/tree/master/{dir} https://git.kevinlin.info/external/go-git/blob/master/{dir}/{file}#L{line}"></head><body><pre>// A highly extensible git implementation in pure Go.
+// 
+// go-git aims to reach the completeness of libgit2 or jgit, nowadays covers the
+// majority of the plumbing read operations and some of the main write
+// operations, but lacks the main porcelain operations such as merges.
+// 
+// It is highly extensible, we have been following the open/close principle in
+// its design to facilitate extensions, mainly focusing the efforts on the
+// persistence of the objects.
+package git // import &#34;lib.kevinlin.info/external/go-git&#34;
+
+
+CONSTANTS
+
+// GitDirName this is a special folder where all the git stuff is.
+const GitDirName = &#34;.git&#34;
+
+const (
+	LogOrderDefault LogOrder = iota
+	LogOrderDFS
+	LogOrderDFSPost
+	LogOrderBSF
+	LogOrderCommitterTime
+)
+
+const (
+	// MixedReset resets the index but not the working tree (i.e., the changed
+	// files are preserved but not marked for commit) and reports what has not
+	// been updated. This is the default action.
+	MixedReset ResetMode = iota
+	// HardReset resets the index and working tree. Any changes to tracked files
+	// in the working tree are discarded.
+	HardReset
+	// MergeReset resets the index and updates the files in the working tree
+	// that are different between Commit and HEAD, but keeps those which are
+	// different between the index and working tree (i.e. which have changes
+	// which have not been added).
+	//
+	// If a file that is different between Commit and the index has unstaged
+	// changes, reset is aborted.
+	MergeReset
+	// SoftReset does not touch the index file or the working tree at all (but
+	// resets the head to &lt;commit&gt;, just like all modes do). This leaves all
+	// your changed files &#34;Changes to be committed&#34;, as git status would put it.
+	SoftReset
+)
+
+const (
+	Unmodified         StatusCode = &#39; &#39;
+	Untracked          StatusCode = &#39;?&#39;
+	Modified           StatusCode = &#39;M&#39;
+	Added              StatusCode = &#39;A&#39;
+	Deleted            StatusCode = &#39;D&#39;
+	Renamed            StatusCode = &#39;R&#39;
+	Copied             StatusCode = &#39;C&#39;
+	UpdatedButUnmerged StatusCode = &#39;U&#39;
+)
+
+const (
+	// DefaultRemoteName name of the default Remote, just like git command.
+	DefaultRemoteName = &#34;origin&#34;
+
+	// NoRecurseSubmodules disables the recursion for a submodule operation.
+	NoRecurseSubmodules SubmoduleRescursivity = 0
+	// DefaultSubmoduleRecursionDepth allow recursion in a submodule operation.
+	DefaultSubmoduleRecursionDepth SubmoduleRescursivity = 10
+)
+
+const (
+	InvalidTagMode TagMode = iota
+	// TagFollowing any tag that points into the histories being fetched is also
+	// fetched. TagFollowing requires a server with `include-tag` capability
+	// in order to fetch the annotated tags objects.
+	TagFollowing
+	// AllTags fetch all tags from the remote (i.e., fetch remote tags
+	// refs/tags/* into local tags with the same name)
+	AllTags
+	//NoTags fetch no tags from the remote at all
+	NoTags
+)
+
+
+VARIABLES
+
+var (
+	ErrBranchHashExclusive  = errors.New(&#34;Branch and Hash are mutually exclusive&#34;)
+	ErrCreateRequiresBranch = errors.New(&#34;Branch is mandatory when Create is used&#34;)
+)
+
+var (
+	ErrMissingName    = errors.New(&#34;name field is required&#34;)
+	ErrMissingTagger  = errors.New(&#34;tagger field is required&#34;)
+	ErrMissingMessage = errors.New(&#34;message field is required&#34;)
+)
+
+var (
+	NoErrAlreadyUpToDate     = errors.New(&#34;already up-to-date&#34;)
+	ErrDeleteRefNotSupported = errors.New(&#34;server does not support delete-refs&#34;)
+	ErrForceNeeded           = errors.New(&#34;some refs were not updated&#34;)
+)
+
+var (
+	// ErrBranchExists an error stating the specified branch already exists
+	ErrBranchExists = errors.New(&#34;branch already exists&#34;)
+	// ErrBranchNotFound an error stating the specified branch does not exist
+	ErrBranchNotFound = errors.New(&#34;branch not found&#34;)
+	// ErrTagExists an error stating the specified tag already exists
+	ErrTagExists = errors.New(&#34;tag already exists&#34;)
+	// ErrTagNotFound an error stating the specified tag does not exist
+	ErrTagNotFound = errors.New(&#34;tag not found&#34;)
+	// ErrFetching is returned when the packfile could not be downloaded
+	ErrFetching = errors.New(&#34;unable to fetch packfile&#34;)
+
+	ErrInvalidReference          = errors.New(&#34;invalid reference, should be a tag or a branch&#34;)
+	ErrRepositoryNotExists       = errors.New(&#34;repository does not exist&#34;)
+	ErrRepositoryAlreadyExists   = errors.New(&#34;repository already exists&#34;)
+	ErrRemoteNotFound            = errors.New(&#34;remote not found&#34;)
+	ErrRemoteExists              = errors.New(&#34;remote already exists&#34;)
+	ErrAnonymousRemoteName       = errors.New(&#34;anonymous remote name must be &#39;anonymous&#39;&#34;)
+	ErrWorktreeNotProvided       = errors.New(&#34;worktree should be provided&#34;)
+	ErrIsBareRepository          = errors.New(&#34;worktree not available in a bare repository&#34;)
+	ErrUnableToResolveCommit     = errors.New(&#34;unable to resolve commit&#34;)
+	ErrPackedObjectsNotSupported = errors.New(&#34;Packed objects not supported&#34;)
+)
+
+var (
+	ErrSubmoduleAlreadyInitialized = errors.New(&#34;submodule already initialized&#34;)
+	ErrSubmoduleNotInitialized     = errors.New(&#34;submodule not initialized&#34;)
+)
+
+var (
+	ErrWorktreeNotClean     = errors.New(&#34;worktree is not clean&#34;)
+	ErrSubmoduleNotFound    = errors.New(&#34;submodule not found&#34;)
+	ErrUnstagedChanges      = errors.New(&#34;worktree contains unstaged changes&#34;)
+	ErrGitModulesSymlink    = errors.New(gitmodulesFile + &#34; is a symlink&#34;)
+	ErrNonFastForwardUpdate = errors.New(&#34;non-fast-forward update&#34;)
+)
+
+var (
+	// ErrDestinationExists in an Move operation means that the target exists on
+	// the worktree.
+	ErrDestinationExists = errors.New(&#34;destination exists&#34;)
+	// ErrGlobNoMatches in an AddGlob if the glob pattern does not match any
+	// files in the worktree.
+	ErrGlobNoMatches = errors.New(&#34;glob pattern did not match any files&#34;)
+)
+
+var (
+	ErrHashOrReference = errors.New(&#34;ambiguous options, only one of CommitHash or ReferenceName can be passed&#34;)
+)
+
+var ErrLooseObjectsNotSupported = errors.New(&#34;Loose objects not supported&#34;)
+
+var (
+	ErrMissingAuthor = errors.New(&#34;author field is required&#34;)
+)
+
+var (
+	ErrMissingURL = errors.New(&#34;URL field is required&#34;)
+)
+
+
+TYPES
+
+// BlameResult represents the result of a Blame operation.
+type BlameResult struct {
+	// Path is the path of the File that we&#39;re blaming.
+	Path string
+	// Rev (Revision) is the hash of the specified Commit used to generate this result.
+	Rev plumbing.Hash
+	// Lines contains every line with its authorship.
+	Lines []*Line
+}
+
+// CheckoutOptions describes how a checkout operation should be performed.
+type CheckoutOptions struct {
+	// Hash is the hash of the commit to be checked out. If used, HEAD will be
+	// in detached mode. If Create is not used, Branch and Hash are mutually
+	// exclusive.
+	Hash plumbing.Hash
+	// Branch to be checked out, if Branch and Hash are empty is set to `master`.
+	Branch plumbing.ReferenceName
+	// Create a new branch named Branch and start it at Hash.
+	Create bool
+	// Force, if true when switching branches, proceed even if the index or the
+	// working tree differs from HEAD. This is used to throw away local changes
+	Force bool
+	// Keep, if true when switching branches, local changes (the index or the
+	// working tree changes) will be kept so that they can be committed to the
+	// target branch. Force and Keep are mutually exclusive, should not be both
+	// set to true.
+	Keep bool
+}
+
+// CleanOptions describes how a clean should be performed.
+type CleanOptions struct {
+	Dir bool
+}
+
+// CloneOptions describes how a clone should be performed.
+type CloneOptions struct {
+	// The (possibly remote) repository URL to clone from.
+	URL string
+	// Auth credentials, if required, to use with the remote repository.
+	Auth transport.AuthMethod
+	// Name of the remote to be added, by default `origin`.
+	RemoteName string
+	// Remote branch to clone.
+	ReferenceName plumbing.ReferenceName
+	// Fetch only ReferenceName if true.
+	SingleBranch bool
+	// No checkout of HEAD after clone if true.
+	NoCheckout bool
+	// Limit fetching to the specified number of commits.
+	Depth int
+	// RecurseSubmodules after the clone is created, initialize all submodules
+	// within, using their default settings. This option is ignored if the
+	// cloned repository does not have a worktree.
+	RecurseSubmodules SubmoduleRescursivity
+	// Progress is where the human readable information sent by the server is
+	// stored, if nil nothing is stored and the capability (if supported)
+	// no-progress, is sent to the server to avoid send this information.
+	Progress sideband.Progress
+	// Tags describe how the tags will be fetched from the remote repository,
+	// by default is AllTags.
+	Tags TagMode
+}
+
+// CommitOptions describes how a commit operation should be performed.
+type CommitOptions struct {
+	// All automatically stage files that have been modified and deleted, but
+	// new files you have not told Git about are not affected.
+	All bool
+	// Author is the author&#39;s signature of the commit.
+	Author *object.Signature
+	// Committer is the committer&#39;s signature of the commit. If Committer is
+	// nil the Author signature is used.
+	Committer *object.Signature
+	// Parents are the parents commits for the new commit, by default when
+	// len(Parents) is zero, the hash of HEAD reference is used.
+	Parents []plumbing.Hash
+	// SignKey denotes a key to sign the commit with. A nil value here means the
+	// commit will not be signed. The private key must be present and already
+	// decrypted.
+	SignKey *openpgp.Entity
+}
+
+// CreateTagOptions describes how a tag object should be created.
+type CreateTagOptions struct {
+	// Tagger defines the signature of the tag creator.
+	Tagger *object.Signature
+	// Message defines the annotation of the tag. It is canonicalized during
+	// validation into the format expected by git - no leading whitespace and
+	// ending in a newline.
+	Message string
+	// SignKey denotes a key to sign the tag with. A nil value here means the tag
+	// will not be signed. The private key must be present and already decrypted.
+	SignKey *openpgp.Entity
+}
+
+// FetchOptions describes how a fetch should be performed
+type FetchOptions struct {
+	// Name of the remote to fetch from. Defaults to origin.
+	RemoteName string
+	RefSpecs   []config.RefSpec
+	// Depth limit fetching to the specified number of commits from the tip of
+	// each remote branch history.
+	Depth int
+	// Auth credentials, if required, to use with the remote repository.
+	Auth transport.AuthMethod
+	// Progress is where the human readable information sent by the server is
+	// stored, if nil nothing is stored and the capability (if supported)
+	// no-progress, is sent to the server to avoid send this information.
+	Progress sideband.Progress
+	// Tags describe how the tags will be fetched from the remote repository,
+	// by default is TagFollowing.
+	Tags TagMode
+	// Force allows the fetch to update a local branch even when the remote
+	// branch does not descend from it.
+	Force bool
+}
+
+// FileStatus contains the status of a file in the worktree
+type FileStatus struct {
+	// Staging is the status of a file in the staging area
+	Staging StatusCode
+	// Worktree is the status of a file in the worktree
+	Worktree StatusCode
+	// Extra contains extra information, such as the previous name in a rename
+	Extra string
+}
+
+// GrepOptions describes how a grep should be performed.
+type GrepOptions struct {
+	// Patterns are compiled Regexp objects to be matched.
+	Patterns []*regexp.Regexp
+	// InvertMatch selects non-matching lines.
+	InvertMatch bool
+	// CommitHash is the hash of the commit from which worktree should be derived.
+	CommitHash plumbing.Hash
+	// ReferenceName is the branch or tag name from which worktree should be derived.
+	ReferenceName plumbing.ReferenceName
+	// PathSpecs are compiled Regexp objects of pathspec to use in the matching.
+	PathSpecs []*regexp.Regexp
+}
+
+// GrepResult is structure of a grep result.
+type GrepResult struct {
+	// FileName is the name of file which contains match.
+	FileName string
+	// LineNumber is the line number of a file at which a match was found.
+	LineNumber int
+	// Content is the content of the file at the matching line.
+	Content string
+	// TreeName is the name of the tree (reference name/commit hash) at
+	// which the match was performed.
+	TreeName string
+}
+
+// Line values represent the contents and author of a line in BlamedResult values.
+type Line struct {
+	// Author is the email address of the last author that modified the line.
+	Author string
+	// Text is the original text of the line.
+	Text string
+	// Date is when the original text of the line was introduced
+	Date time.Time
+	// Hash is the commit hash that introduced the original line
+	Hash plumbing.Hash
+}
+
+// ListOptions describes how a remote list should be performed.
+type ListOptions struct {
+	// Auth credentials, if required, to use with the remote repository.
+	Auth transport.AuthMethod
+}
+
+// LogOptions describes how a log action should be performed.
+type LogOptions struct {
+	// When the From option is set the log will only contain commits
+	// reachable from it. If this option is not set, HEAD will be used as
+	// the default From.
+	From plumbing.Hash
+
+	// The default traversal algorithm is Depth-first search
+	// set Order=LogOrderCommitterTime for ordering by committer time (more compatible with `git log`)
+	// set Order=LogOrderBSF for Breadth-first search
+	Order LogOrder
+
+	// Show only those commits in which the specified file was inserted/updated.
+	// It is equivalent to running `git log -- &lt;file-name&gt;`.
+	FileName *string
+
+	// Pretend as if all the refs in refs/, along with HEAD, are listed on the command line as &lt;commit&gt;.
+	// It is equivalent to running `git log --all`.
+	// If set on true, the From option will be ignored.
+	All bool
+
+	// Show commits more recent than a specific date.
+	// It is equivalent to running `git log --since &lt;date&gt;` or `git log --after &lt;date&gt;`.
+	Since *time.Time
+
+	// Show commits older than a specific date.
+	// It is equivalent to running `git log --until &lt;date&gt;` or `git log --before &lt;date&gt;`.
+	Until *time.Time
+}
+
+type LogOrder int8
+
+// PlainOpenOptions describes how opening a plain repository should be
+// performed.
+type PlainOpenOptions struct {
+	// DetectDotGit defines whether parent directories should be
+	// walked until a .git directory or file is found.
+	DetectDotGit bool
+}
+
+type PruneHandler func(unreferencedObjectHash plumbing.Hash) error
+
+type PruneOptions struct {
+	// OnlyObjectsOlderThan if set to non-zero value
+	// selects only objects older than the time provided.
+	OnlyObjectsOlderThan time.Time
+	// Handler is called on matching objects
+	Handler PruneHandler
+}
+
+// PullOptions describes how a pull should be performed.
+type PullOptions struct {
+	// Name of the remote to be pulled. If empty, uses the default.
+	RemoteName string
+	// Remote branch to clone. If empty, uses HEAD.
+	ReferenceName plumbing.ReferenceName
+	// Fetch only ReferenceName if true.
+	SingleBranch bool
+	// Limit fetching to the specified number of commits.
+	Depth int
+	// Auth credentials, if required, to use with the remote repository.
+	Auth transport.AuthMethod
+	// RecurseSubmodules controls if new commits of all populated submodules
+	// should be fetched too.
+	RecurseSubmodules SubmoduleRescursivity
+	// Progress is where the human readable information sent by the server is
+	// stored, if nil nothing is stored and the capability (if supported)
+	// no-progress, is sent to the server to avoid send this information.
+	Progress sideband.Progress
+	// Force allows the pull to update a local branch even when the remote
+	// branch does not descend from it.
+	Force bool
+}
+
+// PushOptions describes how a push should be performed.
+type PushOptions struct {
+	// RemoteName is the name of the remote to be pushed to.
+	RemoteName string
+	// RefSpecs specify what destination ref to update with what source
+	// object. A refspec with empty src can be used to delete a reference.
+	RefSpecs []config.RefSpec
+	// Auth credentials, if required, to use with the remote repository.
+	Auth transport.AuthMethod
+	// Progress is where the human readable information sent by the server is
+	// stored, if nil nothing is stored.
+	Progress sideband.Progress
+	// Prune specify that remote refs that match given RefSpecs and that do
+	// not exist locally will be removed.
+	Prune bool
+}
+
+// Remote represents a connection to a remote repository.
+type Remote struct {
+	c *config.RemoteConfig
+	s storage.Storer
+}
+
+type RepackConfig struct {
+	// UseRefDeltas configures whether packfile encoder will use reference deltas.
+	// By default OFSDeltaObject is used.
+	UseRefDeltas bool
+	// OnlyDeletePacksOlderThan if set to non-zero value
+	// selects only objects older than the time provided.
+	OnlyDeletePacksOlderThan time.Time
+}
+
+// Repository represents a git repository
+type Repository struct {
+	Storer storage.Storer
+
+	r  map[string]*Remote
+	wt billy.Filesystem
+}
+
+// ResetMode defines the mode of a reset operation.
+type ResetMode int8
+
+// ResetOptions describes how a reset operation should be performed.
+type ResetOptions struct {
+	// Commit, if commit is present set the current branch head (HEAD) to it.
+	Commit plumbing.Hash
+	// Mode, form resets the current branch head to Commit and possibly updates
+	// the index (resetting it to the tree of Commit) and the working tree
+	// depending on Mode. If empty MixedReset is used.
+	Mode ResetMode
+}
+
+// Status represents the current status of a Worktree.
+// The key of the map is the path of the file.
+type Status map[string]*FileStatus
+
+// StatusCode status code of a file in the Worktree
+type StatusCode byte
+
+// Submodule a submodule allows you to keep another Git repository in a
+// subdirectory of your repository.
+type Submodule struct {
+	// initialized defines if a submodule was already initialized.
+	initialized bool
+
+	c *config.Submodule
+	w *Worktree
+}
+
+// SubmoduleRescursivity defines how depth will affect any submodule recursive
+// operation.
+type SubmoduleRescursivity uint
+
+// SubmoduleStatus contains the status for a submodule in the worktree
+type SubmoduleStatus struct {
+	Path     string
+	Current  plumbing.Hash
+	Expected plumbing.Hash
+	Branch   plumbing.ReferenceName
+}
+
+// SubmoduleUpdateOptions describes how a submodule update should be performed.
+type SubmoduleUpdateOptions struct {
+	// Init, if true initializes the submodules recorded in the index.
+	Init bool
+	// NoFetch tell to the update command to not fetch new objects from the
+	// remote site.
+	NoFetch bool
+	// RecurseSubmodules the update is performed not only in the submodules of
+	// the current repository but also in any nested submodules inside those
+	// submodules (and so on). Until the SubmoduleRescursivity is reached.
+	RecurseSubmodules SubmoduleRescursivity
+	// Auth credentials, if required, to use with the remote repository.
+	Auth transport.AuthMethod
+}
+
+// Submodules list of several submodules from the same repository.
+type Submodules []*Submodule
+
+// SubmodulesStatus contains the status for all submodiles in the worktree
+type SubmodulesStatus []*SubmoduleStatus
+
+type TagMode int
+
+// Worktree represents a git worktree.
+type Worktree struct {
+	// Filesystem underlying filesystem.
+	Filesystem billy.Filesystem
+	// External excludes not found in the repository .gitignore
+	Excludes []gitignore.Pattern
+
+	r *Repository
+}
+
+
+FUNCTIONS
+
+// Blame returns a BlameResult with the information about the last author of
+// each line from file `path` at commit `c`.
+func Blame(c *object.Commit, path string) (*BlameResult, error)
+
+// Validate validates the fields and sets the default values.
+func (o *CheckoutOptions) Validate() error
+
+// Validate validates the fields and sets the default values.
+func (o *CloneOptions) Validate() error
+
+// Validate validates the fields and sets the default values.
+func (o *CommitOptions) Validate(r *Repository) error
+
+// Validate validates the fields and sets the default values.
+func (o *CreateTagOptions) Validate(r *Repository, hash plumbing.Hash) error
+
+// Validate validates the fields and sets the default values.
+func (o *FetchOptions) Validate() error
+
+// Validate validates the fields and sets the default values.
+func (o *GrepOptions) Validate(w *Worktree) error
+
+func (gr GrepResult) String() string
+
+// Validate validates the fields and sets the default values.
+func (o *PlainOpenOptions) Validate() error
+
+// Validate validates the fields and sets the default values.
+func (o *PullOptions) Validate() error
+
+// Validate validates the fields and sets the default values.
+func (o *PushOptions) Validate() error
+
+// NewRemote creates a new Remote.
+// The intended purpose is to use the Remote for tasks such as listing remote references (like using git ls-remote).
+// Otherwise Remotes should be created via the use of a Repository.
+func NewRemote(s storage.Storer, c *config.RemoteConfig) *Remote
+
+// Config returns the RemoteConfig object used to instantiate this Remote.
+func (r *Remote) Config() *config.RemoteConfig
+
+// Fetch fetches references along with the objects necessary to complete their
+// histories.
+// 
+// Returns nil if the operation is successful, NoErrAlreadyUpToDate if there are
+// no changes to be fetched, or an error.
+func (r *Remote) Fetch(o *FetchOptions) error
+
+// FetchContext fetches references along with the objects necessary to complete
+// their histories.
+// 
+// Returns nil if the operation is successful, NoErrAlreadyUpToDate if there are
+// no changes to be fetched, or an error.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func (r *Remote) FetchContext(ctx context.Context, o *FetchOptions) error
+
+// List the references on the remote repository.
+func (r *Remote) List(o *ListOptions) (rfs []*plumbing.Reference, err error)
+
+// Push performs a push to the remote. Returns NoErrAlreadyUpToDate if the
+// remote was already up-to-date.
+func (r *Remote) Push(o *PushOptions) error
+
+// PushContext performs a push to the remote. Returns NoErrAlreadyUpToDate if
+// the remote was already up-to-date.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func (r *Remote) PushContext(ctx context.Context, o *PushOptions) (err error)
+
+func (r *Remote) String() string
+
+// Clone a repository into the given Storer and worktree Filesystem with the
+// given options, if worktree is nil a bare repository is created. If the given
+// storer is not empty ErrRepositoryAlreadyExists is returned.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func Clone(s storage.Storer, worktree billy.Filesystem, o *CloneOptions) (*Repository, error)
+
+// CloneContext a repository into the given Storer and worktree Filesystem with
+// the given options, if worktree is nil a bare repository is created. If the
+// given storer is not empty ErrRepositoryAlreadyExists is returned.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func CloneContext(
+	ctx context.Context, s storage.Storer, worktree billy.Filesystem, o *CloneOptions,
+) (*Repository, error)
+
+// Init creates an empty git repository, based on the given Storer and worktree.
+// The worktree Filesystem is optional, if nil a bare repository is created. If
+// the given storer is not empty ErrRepositoryAlreadyExists is returned
+func Init(s storage.Storer, worktree billy.Filesystem) (*Repository, error)
+
+// Open opens a git repository using the given Storer and worktree filesystem,
+// if the given storer is complete empty ErrRepositoryNotExists is returned.
+// The worktree can be nil when the repository being opened is bare, if the
+// repository is a normal one (not bare) and worktree is nil the err
+// ErrWorktreeNotProvided is returned
+func Open(s storage.Storer, worktree billy.Filesystem) (*Repository, error)
+
+// PlainClone a repository into the path with the given options, isBare defines
+// if the new repository will be bare or normal. If the path is not empty
+// ErrRepositoryAlreadyExists is returned.
+// 
+// TODO(mcuadros): move isBare to CloneOptions in v5
+func PlainClone(path string, isBare bool, o *CloneOptions) (*Repository, error)
+
+// PlainCloneContext a repository into the path with the given options, isBare
+// defines if the new repository will be bare or normal. If the path is not empty
+// ErrRepositoryAlreadyExists is returned.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+// 
+// TODO(mcuadros): move isBare to CloneOptions in v5
+// TODO(smola): refuse upfront to clone on a non-empty directory in v5, see #1027
+func PlainCloneContext(ctx context.Context, path string, isBare bool, o *CloneOptions) (*Repository, error)
+
+// PlainInit create an empty git repository at the given path. isBare defines
+// if the repository will have worktree (non-bare) or not (bare), if the path
+// is not empty ErrRepositoryAlreadyExists is returned.
+func PlainInit(path string, isBare bool) (*Repository, error)
+
+// PlainOpen opens a git repository from the given path. It detects if the
+// repository is bare or a normal one. If the path doesn&#39;t contain a valid
+// repository ErrRepositoryNotExists is returned
+func PlainOpen(path string) (*Repository, error)
+
+// PlainOpenWithOptions opens a git repository from the given path with specific
+// options. See PlainOpen for more info.
+func PlainOpenWithOptions(path string, o *PlainOpenOptions) (*Repository, error)
+
+// BlobObject returns a Blob with the given hash. If not found
+// plumbing.ErrObjectNotFound is returned.
+func (r *Repository) BlobObject(h plumbing.Hash) (*object.Blob, error)
+
+// BlobObjects returns an unsorted BlobIter with all the blobs in the repository.
+func (r *Repository) BlobObjects() (*object.BlobIter, error)
+
+// Branch return a Branch if exists
+func (r *Repository) Branch(name string) (*config.Branch, error)
+
+// Branches returns all the References that are Branches.
+func (r *Repository) Branches() (storer.ReferenceIter, error)
+
+// CommitObject return a Commit with the given hash. If not found
+// plumbing.ErrObjectNotFound is returned.
+func (r *Repository) CommitObject(h plumbing.Hash) (*object.Commit, error)
+
+// CommitObjects returns an unsorted CommitIter with all the commits in the repository.
+func (r *Repository) CommitObjects() (object.CommitIter, error)
+
+// Config return the repository config
+func (r *Repository) Config() (*config.Config, error)
+
+// CreateBranch creates a new Branch
+func (r *Repository) CreateBranch(c *config.Branch) error
+
+// CreateRemote creates a new remote
+func (r *Repository) CreateRemote(c *config.RemoteConfig) (*Remote, error)
+
+// CreateRemoteAnonymous creates a new anonymous remote. c.Name must be &#34;anonymous&#34;.
+// It&#39;s used like &#39;git fetch git@github.com:src-d/go-git.git master:master&#39;.
+func (r *Repository) CreateRemoteAnonymous(c *config.RemoteConfig) (*Remote, error)
+
+// CreateTag creates a tag. If opts is included, the tag is an annotated tag,
+// otherwise a lightweight tag is created.
+func (r *Repository) CreateTag(name string, hash plumbing.Hash, opts *CreateTagOptions) (*plumbing.Reference, error)
+
+// DeleteBranch delete a Branch from the repository and delete the config
+func (r *Repository) DeleteBranch(name string) error
+
+// DeleteObject deletes an object from a repository.
+// The type conveniently matches PruneHandler.
+func (r *Repository) DeleteObject(hash plumbing.Hash) error
+
+// DeleteRemote delete a remote from the repository and delete the config
+func (r *Repository) DeleteRemote(name string) error
+
+// DeleteTag deletes a tag from the repository.
+func (r *Repository) DeleteTag(name string) error
+
+// Fetch fetches references along with the objects necessary to complete
+// their histories, from the remote named as FetchOptions.RemoteName.
+// 
+// Returns nil if the operation is successful, NoErrAlreadyUpToDate if there are
+// no changes to be fetched, or an error.
+func (r *Repository) Fetch(o *FetchOptions) error
+
+// FetchContext fetches references along with the objects necessary to complete
+// their histories, from the remote named as FetchOptions.RemoteName.
+// 
+// Returns nil if the operation is successful, NoErrAlreadyUpToDate if there are
+// no changes to be fetched, or an error.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func (r *Repository) FetchContext(ctx context.Context, o *FetchOptions) error
+
+// Head returns the reference where HEAD is pointing to.
+func (r *Repository) Head() (*plumbing.Reference, error)
+
+// Log returns the commit history from the given LogOptions.
+func (r *Repository) Log(o *LogOptions) (object.CommitIter, error)
+
+// Notes returns all the References that are notes. For more information:
+// https://git-scm.com/docs/git-notes
+func (r *Repository) Notes() (storer.ReferenceIter, error)
+
+// Object returns an Object with the given hash. If not found
+// plumbing.ErrObjectNotFound is returned.
+func (r *Repository) Object(t plumbing.ObjectType, h plumbing.Hash) (object.Object, error)
+
+// Objects returns an unsorted ObjectIter with all the objects in the repository.
+func (r *Repository) Objects() (*object.ObjectIter, error)
+
+func (r *Repository) Prune(opt PruneOptions) error
+
+// Push performs a push to the remote. Returns NoErrAlreadyUpToDate if
+// the remote was already up-to-date, from the remote named as
+// FetchOptions.RemoteName.
+func (r *Repository) Push(o *PushOptions) error
+
+// PushContext performs a push to the remote. Returns NoErrAlreadyUpToDate if
+// the remote was already up-to-date, from the remote named as
+// FetchOptions.RemoteName.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func (r *Repository) PushContext(ctx context.Context, o *PushOptions) error
+
+// Reference returns the reference for a given reference name. If resolved is
+// true, any symbolic reference will be resolved.
+func (r *Repository) Reference(name plumbing.ReferenceName, resolved bool) (
+	*plumbing.Reference, error)
+
+// References returns an unsorted ReferenceIter for all references.
+func (r *Repository) References() (storer.ReferenceIter, error)
+
+// Remote return a remote if exists
+func (r *Repository) Remote(name string) (*Remote, error)
+
+// Remotes returns a list with all the remotes
+func (r *Repository) Remotes() ([]*Remote, error)
+
+func (r *Repository) RepackObjects(cfg *RepackConfig) (err error)
+
+// ResolveRevision resolves revision to corresponding hash. It will always
+// resolve to a commit hash, not a tree or annotated tag.
+// 
+// Implemented resolvers : HEAD, branch, tag, heads/branch, refs/heads/branch,
+// refs/tags/tag, refs/remotes/origin/branch, refs/remotes/origin/HEAD, tilde and caret (HEAD~1, master~^, tag~2, ref/heads/master~1, ...), selection by text (HEAD^{/fix nasty bug})
+func (r *Repository) ResolveRevision(rev plumbing.Revision) (*plumbing.Hash, error)
+
+// Tag returns a tag from the repository.
+// 
+// If you want to check to see if the tag is an annotated tag, you can call
+// TagObject on the hash of the reference in ForEach:
+// 
+//   ref, err := r.Tag(&#34;v0.1.0&#34;)
+//   if err != nil {
+//     // Handle error
+//   }
+// 
+//   obj, err := r.TagObject(ref.Hash())
+//   switch err {
+//   case nil:
+//     // Tag object present
+//   case plumbing.ErrObjectNotFound:
+//     // Not a tag object
+//   default:
+//     // Some other error
+//   }
+func (r *Repository) Tag(name string) (*plumbing.Reference, error)
+
+// TagObject returns a Tag with the given hash. If not found
+// plumbing.ErrObjectNotFound is returned. This method only returns
+// annotated Tags, no lightweight Tags.
+func (r *Repository) TagObject(h plumbing.Hash) (*object.Tag, error)
+
+// TagObjects returns a unsorted TagIter that can step through all of the annotated
+// tags in the repository.
+func (r *Repository) TagObjects() (*object.TagIter, error)
+
+// Tags returns all the tag References in a repository.
+// 
+// If you want to check to see if the tag is an annotated tag, you can call
+// TagObject on the hash Reference passed in through ForEach:
+// 
+//   iter, err := r.Tags()
+//   if err != nil {
+//     // Handle error
+//   }
+// 
+//   if err := iter.ForEach(func (ref *plumbing.Reference) error {
+//     obj, err := r.TagObject(ref.Hash())
+//     switch err {
+//     case nil:
+//       // Tag object present
+//     case plumbing.ErrObjectNotFound:
+//       // Not a tag object
+//     default:
+//       // Some other error
+//       return err
+//     }
+//   }); err != nil {
+//     // Handle outer iterator error
+//   }
+func (r *Repository) Tags() (storer.ReferenceIter, error)
+
+// TreeObject return a Tree with the given hash. If not found
+// plumbing.ErrObjectNotFound is returned
+func (r *Repository) TreeObject(h plumbing.Hash) (*object.Tree, error)
+
+// TreeObjects returns an unsorted TreeIter with all the trees in the repository
+func (r *Repository) TreeObjects() (*object.TreeIter, error)
+
+// Worktree returns a worktree based on the given fs, if nil the default
+// worktree will be used.
+func (r *Repository) Worktree() (*Worktree, error)
+
+// Validate validates the fields and sets the default values.
+func (o *ResetOptions) Validate(r *Repository) error
+
+// File returns the FileStatus for a given path, if the FileStatus doesn&#39;t
+// exists a new FileStatus is added to the map using the path as key.
+func (s Status) File(path string) *FileStatus
+
+// IsClean returns true if all the files are in Unmodified status.
+func (s Status) IsClean() bool
+
+// IsUntracked checks if file for given path is &#39;Untracked&#39;
+func (s Status) IsUntracked(path string) bool
+
+func (s Status) String() string
+
+// Config returns the submodule config
+func (s *Submodule) Config() *config.Submodule
+
+// Init initialize the submodule reading the recorded Entry in the index for
+// the given submodule
+func (s *Submodule) Init() error
+
+// Repository returns the Repository represented by this submodule
+func (s *Submodule) Repository() (*Repository, error)
+
+// Status returns the status of the submodule.
+func (s *Submodule) Status() (*SubmoduleStatus, error)
+
+// Update the registered submodule to match what the superproject expects, the
+// submodule should be initialized first calling the Init method or setting in
+// the options SubmoduleUpdateOptions.Init equals true
+func (s *Submodule) Update(o *SubmoduleUpdateOptions) error
+
+// UpdateContext the registered submodule to match what the superproject
+// expects, the submodule should be initialized first calling the Init method or
+// setting in the options SubmoduleUpdateOptions.Init equals true.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func (s *Submodule) UpdateContext(ctx context.Context, o *SubmoduleUpdateOptions) error
+
+// IsClean is the HEAD of the submodule is equals to the expected commit
+func (s *SubmoduleStatus) IsClean() bool
+
+// String is equivalent to `git submodule status &lt;submodule&gt;`
+// 
+// This will print the SHA-1 of the currently checked out commit for a
+// submodule, along with the submodule path and the output of git describe fo
+// the SHA-1. Each SHA-1 will be prefixed with - if the submodule is not
+// initialized, + if the currently checked out submodule commit does not match
+// the SHA-1 found in the index of the containing repository.
+func (s *SubmoduleStatus) String() string
+
+// Init initializes the submodules in this list.
+func (s Submodules) Init() error
+
+// Status returns the status of the submodules.
+func (s Submodules) Status() (SubmodulesStatus, error)
+
+// Update updates all the submodules in this list.
+func (s Submodules) Update(o *SubmoduleUpdateOptions) error
+
+// UpdateContext updates all the submodules in this list.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func (s Submodules) UpdateContext(ctx context.Context, o *SubmoduleUpdateOptions) error
+
+// String is equivalent to `git submodule status`
+func (s SubmodulesStatus) String() string
+
+// Add adds the file contents of a file in the worktree to the index. if the
+// file is already staged in the index no error is returned. If a file deleted
+// from the Workspace is given, the file is removed from the index. If a
+// directory given, adds the files and all his sub-directories recursively in
+// the worktree to the index. If any of the files is already staged in the index
+// no error is returned. When path is a file, the blob.Hash is returned.
+func (w *Worktree) Add(path string) (plumbing.Hash, error)
+
+// AddGlob adds all paths, matching pattern, to the index. If pattern matches a
+// directory path, all directory contents are added to the index recursively. No
+// error is returned if all matching paths are already staged in index.
+func (w *Worktree) AddGlob(pattern string) error
+
+// Checkout switch branches or restore working tree files.
+func (w *Worktree) Checkout(opts *CheckoutOptions) error
+
+// Clean the worktree by removing untracked files.
+// An empty dir could be removed - this is what  `git clean -f -d .` does.
+func (w *Worktree) Clean(opts *CleanOptions) error
+
+// Commit stores the current contents of the index in a new commit along with
+// a log message from the user describing the changes.
+func (w *Worktree) Commit(msg string, opts *CommitOptions) (plumbing.Hash, error)
+
+// Grep performs grep on a worktree.
+func (w *Worktree) Grep(opts *GrepOptions) ([]GrepResult, error)
+
+// Move moves or rename a file in the worktree and the index, directories are
+// not supported.
+func (w *Worktree) Move(from, to string) (plumbing.Hash, error)
+
+// Pull incorporates changes from a remote repository into the current branch.
+// Returns nil if the operation is successful, NoErrAlreadyUpToDate if there are
+// no changes to be fetched, or an error.
+// 
+// Pull only supports merges where the can be resolved as a fast-forward.
+func (w *Worktree) Pull(o *PullOptions) error
+
+// PullContext incorporates changes from a remote repository into the current
+// branch. Returns nil if the operation is successful, NoErrAlreadyUpToDate if
+// there are no changes to be fetched, or an error.
+// 
+// Pull only supports merges where the can be resolved as a fast-forward.
+// 
+// The provided Context must be non-nil. If the context expires before the
+// operation is complete, an error is returned. The context only affects to the
+// transport operations.
+func (w *Worktree) PullContext(ctx context.Context, o *PullOptions) error
+
+// Remove removes files from the working tree and from the index.
+func (w *Worktree) Remove(path string) (plumbing.Hash, error)
+
+// RemoveGlob removes all paths, matching pattern, from the index. If pattern
+// matches a directory path, all directory contents are removed from the index
+// recursively.
+func (w *Worktree) RemoveGlob(pattern string) error
+
+// Reset the worktree to a specified state.
+func (w *Worktree) Reset(opts *ResetOptions) error
+
+// Status returns the working tree status.
+func (w *Worktree) Status() (Status, error)
+
+// Submodule returns the submodule with the given name
+func (w *Worktree) Submodule(name string) (*Submodule, error)
+
+// Submodules returns all the available submodules
+func (w *Worktree) Submodules() (Submodules, error)</pre></body></html>
