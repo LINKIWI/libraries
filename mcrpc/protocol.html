@@ -44,6 +44,12 @@ var (
 	ErrInvalidParse = errors.New(&#34;protocol: command does not parse as a valid request&#34;)
 )
 
+var (
+	// ErrMalformedRequest indicates that no protocol-compliant message could be extracted from
+	// the reader stream.
+	ErrMalformedRequest = errors.New(&#34;protocol: request message is malformed&#34;)
+)
+
 
 TYPES
 
@@ -211,8 +217,7 @@ type PrependResponse struct {
 
 // Reader abstracts over an io.Reader that acts as an input stream for memcache protocol commands.
 type Reader struct {
-	bufStream *bufio.Reader
-	io.Reader
+	b *bufio.Reader
 }
 
 // ReplaceRequest is a Request to replace the value of an existing key.
@@ -440,6 +445,12 @@ func (p *PrependResponse) String() string
 
 // NewReader creates a new protocol-aware reader from an io.Reader.
 func NewReader(stream io.Reader) *Reader
+
+// Read reads from the buffered io.Reader. Note that the buffering may cause the reader&#39;s current
+// logical cursor position to be beyond its physical counterpart in the underlying io.Reader. In
+// order to maintain a consistent view of the reader&#39;s true contents, the Read method transparently
+// uses the buffered reader.
+func (r *Reader) Read(p []byte) (int, error)
 
 // ReadASCIICommand reads a full ASCII command from the underlying io.Reader, exercising heuristics
 // to determine how far into the stream data should be read.

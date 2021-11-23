@@ -69,6 +69,9 @@ type Server struct {
 	connReadTimeout  time.Duration
 	connWriteTimeout time.Duration
 	errorLog         *log.Logger
+	warnLog          *log.Logger
+	infoLog          *log.Logger
+	debugLog         *log.Logger
 }
 
 
@@ -80,8 +83,17 @@ func WithConnReadTimeout(timeout time.Duration) Option
 // WithConnWriteTimeout sets a timeout for all writes on client connections.
 func WithConnWriteTimeout(timeout time.Duration) Option
 
+// WithDebugLog enables a custom debug logger on the server.
+func WithDebugLog(logger *log.Logger) Option
+
 // WithErrorLog enables a custom error logger on the server.
 func WithErrorLog(logger *log.Logger) Option
+
+// WithInfoLog enables a custom error logger on the server.
+func WithInfoLog(logger *log.Logger) Option
+
+// WithWarnLog enables a custom warn logger on the server.
+func WithWarnLog(logger *log.Logger) Option
 
 // NewServer creates a new server backed by a Handler.
 func NewServer(handler Handler, opts ...Option) (*Server, error)
