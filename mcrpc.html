@@ -58,4 +58,33 @@ type Handler interface {
 
 	// Cas implements the cas command.
 	Cas(ctx context.Context, request *protocol.CasRequest) (*protocol.CasResponse, error)
-}</pre></body></html>
+}
+
+// Option is a type alias for a server option.
+type Option func(s *Server) *Server
+
+// Server is a memcache protocol server.
+type Server struct {
+	handler          Handler
+	connReadTimeout  time.Duration
+	connWriteTimeout time.Duration
+	errorLog         *log.Logger
+}
+
+
+FUNCTIONS
+
+// WithConnReadTimeout sets a timeout for all reads on client connections.
+func WithConnReadTimeout(timeout time.Duration) Option
+
+// WithConnWriteTimeout sets a timeout for all writes on client connections.
+func WithConnWriteTimeout(timeout time.Duration) Option
+
+// WithErrorLog enables a custom error logger on the server.
+func WithErrorLog(logger *log.Logger) Option
+
+// NewServer creates a new server backed by a Handler.
+func NewServer(handler Handler, opts ...Option) (*Server, error)
+
+// Serve starts the server on the specified listener.
+func (s *Server) Serve(ln net.Listener) error</pre></body></html>
