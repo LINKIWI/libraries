@@ -1,0 +1,507 @@
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/mcrpc mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/mcrpc https://source.internal.kevinlin.info/personal/mcrpc https://source.internal.kevinlin.info/personal/mcrpc/tree/master/{dir} https://source.internal.kevinlin.info/personal/mcrpc/blob/master/{dir}/{file}#L{line}"></head><body><pre>CONSTANTS
+
+// Enumeration of all recognized commands.
+const (
+	Unknown Command = iota
+	Version
+	Shutdown
+	Flush
+	Stats
+	Watch
+	Touch
+	Delete
+	Incr
+	Decr
+	Get
+	Gets
+	Gat
+	Gats
+	Set
+	Add
+	Replace
+	Append
+	Prepend
+	Cas
+)
+
+const (
+	// Stored indicates the value was stored.
+	Stored StoreStatus = iota
+	// NotStored indicates the value was not stored.
+	NotStored
+	// Exists indicates, for CAS commands, that there is a mismatch in the CAS unique.
+	Exists
+	// NotFound indicates, for CAS commands, that the key does not exist.
+	NotFound
+)
+
+
+VARIABLES
+
+var (
+	// ErrInvalidParse is returned when the input data cannot be parsed according to the defined
+	// ASCII protocol state machine.
+	ErrInvalidParse = errors.New(&#34;protocol: command does not parse as a valid request&#34;)
+)
+
+
+TYPES
+
+// AddRequest is a Request to set a key, but only if it does not already exist.
+type AddRequest struct {
+	Payload *Storage
+}
+
+// AddResponse is the Response counterpart to AddRequest.
+type AddResponse struct {
+	Status StoreStatus
+}
+
+// AppendRequest is a Request to append data to the end of the value associated with an existing
+// key.
+type AppendRequest struct {
+	Payload *Storage
+}
+
+// AppendResponse is the Response counterpart to AppendRequest.
+type AppendResponse struct {
+	Status StoreStatus
+}
+
+// CasRequest is a Request to store a key, with a unique value for check-and-set semantics.
+type CasRequest struct {
+	Payload *Storage
+}
+
+// CasResponse is the Response counterpart to CasRequest.
+type CasResponse struct {
+	Status StoreStatus
+}
+
+// ClientError is a Response indicating that the request is structurally sound (i.e. parsed
+// successfully) but is malformed.
+type ClientError struct {
+	Err error
+}
+
+// Command enumerates all recognized protocol commands.
+type Command int
+
+// DecrRequest is a Request to decrement an integer value.
+type DecrRequest struct {
+	Key     string
+	Delta   uint64
+	NoReply bool
+}
+
+// DecrResponse is the Response counterpart to DecrRequest.
+type DecrResponse struct {
+	Found bool
+	Value uint64
+}
+
+// DeleteRequest is a Request to delete an item.
+type DeleteRequest struct {
+	Key     string
+	NoReply bool
+}
+
+// DeleteResponse is the Response counterpart to DeleteRequest.
+type DeleteResponse struct {
+	Found bool
+}
+
+// Error is a Response indicating that the client sent an unknown command or one that failed to
+// parse.
+type Error struct {
+	Err error
+}
+
+// FlushRequest is a Request to flush the cache of all entries.
+type FlushRequest struct {
+	Delay time.Duration
+}
+
+// FlushResponse is the Response counterpart to FlushRequest.
+type FlushResponse struct{}
+
+// GatRequest is a Request to get and touch one or more keys.
+type GatRequest struct {
+	Expiration time.Duration
+	Keys       []string
+}
+
+// GatResponse is the Response counterpart to GatRequest.
+type GatResponse struct {
+	Values []*Retrieval
+}
+
+// GatsRequest is a Request to get and touch one or more keys with their CAS unique values.
+type GatsRequest struct {
+	Expiration time.Duration
+	Keys       []string
+}
+
+// GatsResponse is the Response counterpart to GatsRequest.
+type GatsResponse struct {
+	Values []*Retrieval
+}
+
+// GetRequest is a Request to fetch the values associated with one or more keys.
+type GetRequest struct {
+	Keys []string
+}
+
+// GetResponse is the Response counterpart to GetRequest.
+type GetResponse struct {
+	Values []*Retrieval
+}
+
+// GetsRequest is a Request to fetch the values and CAS unique values associated with one or more
+// keys.
+type GetsRequest struct {
+	Keys []string
+}
+
+// GetsResponse is the Response counterpart to GetsRequest.
+type GetsResponse struct {
+	Values []*Retrieval
+}
+
+// IncrRequest is a Request to increment an integer value.
+type IncrRequest struct {
+	Key     string
+	Delta   uint64
+	NoReply bool
+}
+
+// IncrResponse is the Response counterpart to IncrRequest.
+type IncrResponse struct {
+	Found bool
+	Value uint64
+}
+
+// LogAttribute is a key-value pair for a single attribute in one log entry.
+type LogAttribute struct {
+	Key   string
+	Value string
+}
+
+// LogEntry is one log line from a watcher.
+type LogEntry struct {
+	Attributes []LogAttribute
+}
+
+// Parser is an interface for a protocol parser.
+type Parser interface {
+	// Parse parses the command into a structured Request.
+	Parse(command []byte) (Request, error)
+}
+
+// PrependRequest is a Request to prepend data to the beginning of the value associated with an
+// existing key.
+type PrependRequest struct {
+	Payload *Storage
+}
+
+// PrependResponse is the Response counterpart to PrependRequest.
+type PrependResponse struct {
+	Status StoreStatus
+}
+
+// Reader abstracts over an io.Reader that acts as an input stream for memcache protocol commands.
+type Reader struct {
+	bufStream *bufio.Reader
+	io.Reader
+}
+
+// ReplaceRequest is a Request to replace the value of an existing key.
+type ReplaceRequest struct {
+	Payload *Storage
+}
+
+// ReplaceResponse is the Response counterpart to ReplaceRequest.
+type ReplaceResponse struct {
+	Status StoreStatus
+}
+
+// Request is an interface for request types.
+type Request interface {
+	// IsNoReply indicates whether the request sets the noreply flag to indicate that the server
+	// should not send a response after request processing completes.
+	IsNoReply() bool
+
+	fmt.Stringer
+}
+
+// Response is an interface for response types.
+type Response interface {
+	fmt.Stringer
+}
+
+// Retrieval describes elements of a value for a get-like request.
+type Retrieval struct {
+	Key       string
+	Flags     uint16
+	Size      int
+	CasUnique uint64
+	Data      []byte
+}
+
+// ServerError is a Response indicating that a server-side error was encountered while trying to
+// serve the request.
+type ServerError struct {
+	Err error
+}
+
+// SetRequest is a Request to set a key.
+type SetRequest struct {
+	Payload *Storage
+}
+
+// SetResponse is the Response counterpart to SetRequest.
+type SetResponse struct {
+	Status StoreStatus
+}
+
+// ShutdownRequest is a Request to shut down the application.
+type ShutdownRequest struct {
+	Type string
+}
+
+// ShutdownResponse is the Response counterpart to ShutdownRequest.
+type ShutdownResponse struct{}
+
+// StatsItem is a structured representation of a single statistic, represented as a key-value pair.
+type StatsItem struct {
+	Name  string
+	Value string
+}
+
+// StatsRequest is a Request for application statistics.
+type StatsRequest struct {
+	Type string
+}
+
+// StatsResponse is a Response with zero or more statistics items.
+type StatsResponse struct {
+	Stats []StatsItem
+}
+
+// Storage describes elements of a value for a update-like request.
+type Storage struct {
+	Key        string
+	Flags      uint16
+	Expiration time.Duration
+	Size       int
+	CasUnique  uint64
+	Data       []byte
+	NoReply    bool
+}
+
+// StoreStatus enumerates known responses for storage commands.
+type StoreStatus int
+
+// TouchRequest is a Request to refresh the TTL of an existing item.
+type TouchRequest struct {
+	Key        string
+	Expiration time.Duration
+	NoReply    bool
+}
+
+// TouchResponse is the Response counterpart to TouchRequest.
+type TouchResponse struct {
+	Found bool
+}
+
+// VersionRequest is a Request for the application version.
+type VersionRequest struct{}
+
+// VersionResponse is a Response for the application version.
+type VersionResponse struct {
+	Version string
+}
+
+// WatchRequest is a Request to stream logs from the logger backend.
+type WatchRequest struct {
+	Loggers []string
+}
+
+// WatchResponse is the Response with zero or more log entries.
+type WatchResponse struct {
+	Logs []LogEntry
+}
+
+
+FUNCTIONS
+
+// IsNoReply returns the NoReply attribute of the request.
+func (a *AddRequest) IsNoReply() bool
+
+func (a *AddRequest) String() string
+
+func (a *AddResponse) String() string
+
+// IsNoReply returns the NoReply attribute of the request.
+func (a *AppendRequest) IsNoReply() bool
+
+func (a *AppendRequest) String() string
+
+func (a *AppendResponse) String() string
+
+// IsNoReply returns the NoReply attribute of the request.
+func (c *CasRequest) IsNoReply() bool
+
+func (c *CasRequest) String() string
+
+func (c *CasResponse) String() string
+
+func (e *ClientError) Error() string
+
+func (e *ClientError) String() string
+
+func (e *ClientError) Unwrap() error
+
+// IsNoReply returns the NoReply attribute of the request.
+func (d *DecrRequest) IsNoReply() bool
+
+func (d *DecrRequest) String() string
+
+func (d *DecrResponse) String() string
+
+// IsNoReply returns the NoReply attribute of the request.
+func (d *DeleteRequest) IsNoReply() bool
+
+func (d *DeleteRequest) String() string
+
+func (d *DeleteResponse) String() string
+
+func (e *Error) Error() string
+
+func (e *Error) String() string
+
+func (e *Error) Unwrap() error
+
+// IsNoReply is always false.
+func (f *FlushRequest) IsNoReply() bool
+
+func (f *FlushRequest) String() string
+
+func (f *FlushResponse) String() string
+
+// IsNoReply is always false.
+func (g *GatRequest) IsNoReply() bool
+
+func (g *GatRequest) String() string
+
+func (g *GatResponse) String() string
+
+// IsNoReply is always false.
+func (g *GatsRequest) IsNoReply() bool
+
+func (g *GatsRequest) String() string
+
+func (g *GatsResponse) String() string
+
+// IsNoReply is always false.
+func (g *GetRequest) IsNoReply() bool
+
+func (g *GetRequest) String() string
+
+func (g *GetResponse) String() string
+
+// IsNoReply is always false.
+func (g *GetsRequest) IsNoReply() bool
+
+func (g *GetsRequest) String() string
+
+func (g *GetsResponse) String() string
+
+// IsNoReply returns the NoReply attribute of the request.
+func (i *IncrRequest) IsNoReply() bool
+
+func (i *IncrRequest) String() string
+
+func (i *IncrResponse) String() string
+
+func (l *LogAttribute) String() string
+
+func (l *LogEntry) String() string
+
+// NewASCIIParser creates a new state machine representing the memcache ASCII protocol.
+func NewASCIIParser() Parser
+
+// IsNoReply returns the NoReply attribute of the request.
+func (p *PrependRequest) IsNoReply() bool
+
+func (p *PrependRequest) String() string
+
+func (p *PrependResponse) String() string
+
+// NewReader creates a new protocol-aware reader from an io.Reader.
+func NewReader(stream io.Reader) *Reader
+
+// ReadASCIICommand reads a full ASCII command from the underlying io.Reader, exercising heuristics
+// to determine how far into the stream data should be read.
+func (r *Reader) ReadASCIICommand() ([]byte, error)
+
+// IsNoReply returns the NoReply attribute of the request.
+func (r *ReplaceRequest) IsNoReply() bool
+
+func (r *ReplaceRequest) String() string
+
+func (r *ReplaceResponse) String() string
+
+func (r *Retrieval) String() string
+
+func (e *ServerError) Error() string
+
+func (e *ServerError) String() string
+
+func (e *ServerError) Unwrap() error
+
+// IsNoReply returns the NoReply attribute of the request.
+func (s *SetRequest) IsNoReply() bool
+
+func (s *SetRequest) String() string
+
+func (s *SetResponse) String() string
+
+// IsNoReply is always false.
+func (s *ShutdownRequest) IsNoReply() bool
+
+func (s *ShutdownRequest) String() string
+
+func (s *ShutdownResponse) String() string
+
+func (s *StatsItem) String() string
+
+// IsNoReply is always false.
+func (s *StatsRequest) IsNoReply() bool
+
+func (s *StatsRequest) String() string
+
+func (s *StatsResponse) String() string
+
+func (s *Storage) String() string
+
+// IsNoReply returns the NoReply attribute of the request.
+func (t *TouchRequest) IsNoReply() bool
+
+func (t *TouchRequest) String() string
+
+func (t *TouchResponse) String() string
+
+// IsNoReply is always false.
+func (v *VersionRequest) IsNoReply() bool
+
+func (v *VersionRequest) String() string
+
+func (v *VersionResponse) String() string
+
+// IsNoReply is always false.
+func (w *WatchRequest) IsNoReply() bool
+
+func (w *WatchRequest) String() string
+
+func (w *WatchResponse) String() string</pre></body></html>
