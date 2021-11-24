@@ -1,0 +1,68 @@
+<!DOCTYPE html><html><head><meta name="go-import" content="lib.kevinlin.info/mcrpc mod https://lib.kevinlin.info"><meta name="go-source" value="lib.kevinlin.info/mcrpc https://source.internal.kevinlin.info/personal/mcrpc https://source.internal.kevinlin.info/personal/mcrpc/tree/master/{dir} https://source.internal.kevinlin.info/personal/mcrpc/blob/master/{dir}/{file}#L{line}"></head><body><pre>// Package lib provides utilities for building mcrpc servers and handlers.
+package lib // import &#34;lib.kevinlin.info/mcrpc/lib&#34;
+
+
+TYPES
+
+// NoopHandler is a Handler that leaves all RPCs unimplemented.
+type NoopHandler struct{}
+
+
+FUNCTIONS
+
+// Add is unimplemented.
+func (nh *NoopHandler) Add(ctx context.Context, request *protocol.AddRequest) (*protocol.AddResponse, error)
+
+// Append is unimplemented.
+func (nh *NoopHandler) Append(ctx context.Context, request *protocol.AppendRequest) (*protocol.AppendResponse, error)
+
+// Cas is unimplemented.
+func (nh *NoopHandler) Cas(ctx context.Context, request *protocol.CasRequest) (*protocol.CasResponse, error)
+
+// Decr is unimplemented.
+func (nh *NoopHandler) Decr(ctx context.Context, request *protocol.DecrRequest) (*protocol.DecrResponse, error)
+
+// Delete is unimplemented.
+func (nh *NoopHandler) Delete(ctx context.Context, request *protocol.DeleteRequest) (*protocol.DeleteResponse, error)
+
+// Flush is unimplemented.
+func (nh *NoopHandler) Flush(ctx context.Context, request *protocol.FlushRequest) (*protocol.FlushResponse, error)
+
+// Gat is unimplemented.
+func (nh *NoopHandler) Gat(ctx context.Context, request *protocol.GatRequest) (*protocol.GatResponse, error)
+
+// Gats is unimplemented.
+func (nh *NoopHandler) Gats(ctx context.Context, request *protocol.GatsRequest) (*protocol.GatsResponse, error)
+
+// Get is unimplemented.
+func (nh *NoopHandler) Get(ctx context.Context, request *protocol.GetRequest) (*protocol.GetResponse, error)
+
+// Gets is unimplemented.
+func (nh *NoopHandler) Gets(ctx context.Context, request *protocol.GetsRequest) (*protocol.GetsResponse, error)
+
+// Incr is unimplemented.
+func (nh *NoopHandler) Incr(ctx context.Context, request *protocol.IncrRequest) (*protocol.IncrResponse, error)
+
+// Prepend is unimplemented.
+func (nh *NoopHandler) Prepend(ctx context.Context, request *protocol.PrependRequest) (*protocol.PrependResponse, error)
+
+// Replace is unimplemented.
+func (nh *NoopHandler) Replace(ctx context.Context, request *protocol.ReplaceRequest) (*protocol.ReplaceResponse, error)
+
+// Set is unimplemented.
+func (nh *NoopHandler) Set(ctx context.Context, request *protocol.SetRequest) (*protocol.SetResponse, error)
+
+// Shutdown is unimplemented.
+func (nh *NoopHandler) Shutdown(ctx context.Context, request *protocol.ShutdownRequest) (*protocol.ShutdownResponse, error)
+
+// Stats is unimplemented.
+func (nh *NoopHandler) Stats(ctx context.Context, request *protocol.StatsRequest) (*protocol.StatsResponse, error)
+
+// Touch is unimplemented.
+func (nh *NoopHandler) Touch(ctx context.Context, request *protocol.TouchRequest) (*protocol.TouchResponse, error)
+
+// Version is unimplemented.
+func (nh *NoopHandler) Version(ctx context.Context, request *protocol.VersionRequest) (*protocol.VersionResponse, error)
+
+// Watch is unimplemented.
+func (nh *NoopHandler) Watch(ctx context.Context, request *protocol.WatchRequest) (*protocol.WatchResponse, error)</pre></body></html>
