@@ -46,6 +46,9 @@ func (nh *NoopHandler) Incr(ctx context.Context, request *protocol.IncrRequest) 
 // Prepend is unimplemented.
 func (nh *NoopHandler) Prepend(ctx context.Context, request *protocol.PrependRequest) (*protocol.PrependResponse, error)
 
+// Quit is unimplemented.
+func (nh *NoopHandler) Quit(ctx context.Context, request *protocol.QuitRequest) (*protocol.QuitResponse, error)
+
 // Replace is unimplemented.
 func (nh *NoopHandler) Replace(ctx context.Context, request *protocol.ReplaceRequest) (*protocol.ReplaceResponse, error)
 

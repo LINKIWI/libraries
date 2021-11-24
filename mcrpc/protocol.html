@@ -11,6 +11,7 @@ const (
 	Version
 	Shutdown
 	Flush
+	Quit
 	Stats
 	Watch
 	Touch
@@ -219,6 +220,12 @@ type PrependRequest struct {
 type PrependResponse struct {
 	Status StoreStatus
 }
+
+// QuitRequest is a Request to close the active connection.
+type QuitRequest struct{}
+
+// QuitResponse is the Response counterpart to QuitRequest.
+type QuitResponse struct{}
 
 // Reader abstracts over an io.Reader that acts as an input stream for memcache protocol commands.
 type Reader struct {
@@ -447,6 +454,14 @@ func (p *PrependRequest) IsNoReply() bool
 func (p *PrependRequest) String() string
 
 func (p *PrependResponse) String() string
+
+// IsNoReply is always true. The server should close the connection immediately without sending back
+// a response to the client.
+func (f *QuitRequest) IsNoReply() bool
+
+func (f *QuitRequest) String() string
+
+func (f *QuitResponse) String() string
 
 // NewReader creates a new protocol-aware reader from an io.Reader.
 func NewReader(stream io.Reader) *Reader
