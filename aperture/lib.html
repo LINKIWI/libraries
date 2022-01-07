@@ -10,6 +10,12 @@ type AsyncStatsd struct {
 	aperture.Statsd
 }
 
+// Field is a list of zero or more key-value pairs from which a full or partial set of serialized
+// tags may be derived.
+type Field struct {
+	items []item
+}
+
 // NoopStatsd implements the Statsd interface but noops on all APIs.
 type NoopStatsd struct{}
 
@@ -23,6 +29,27 @@ type Stopwatch struct {
 
 
 FUNCTIONS
+
+// CombineTags serializes a list of Fields into a map that is suitable for use as the `tags`
+// parameter for aperture.Statsd emission methods. In the case of tag key conflicts, precedence is
+// determined by order; tags that appear later in the list with an existing key name are given
+// precedence of value over those that appear earlier in the list.
+// 
+// This method is typically used in conjunction with Tag and MapTag to augment an existing set of
+// tags or build a set of tags in an adhoc manner. For example:
+// 
+// 	var client aperture.Statsd
+// 	var condition bool
+// 
+// 	// Merge a set of adhoc tags with a base map of tags
+// 	base := map[string]interface{&#34;foo&#34;: &#34;bar&#34;}
+// 	if condition {
+// 		client.Incr(&#34;name&#34;, lib.CombineTags(lib.MapTag(base), lib.Tag(&#34;baz&#34;, &#34;qux&#34;)))
+// 	}
+// 
+// 	// Build a set of tags inline
+// 	client.Incr(&#34;name&#34;, lib.CombineTags(lib.Tag(&#34;foo&#34;, &#34;bar&#34;)))
+func CombineTags(tags ...Field) map[string]interface{}
 
 // NewAsyncStatsd creates an AsyncStatsd wrapping an existing Statsd implementation.
 // Note that, due to the asynchronous nature of the client, write errors are not surfaced; all APIs
@@ -52,6 +79,15 @@ func (a *AsyncStatsd) Timing(name string, duration time.Duration, tags map[strin
 
 // TimingMs invokes the underlying TimingMs in a goroutine.
 func (a *AsyncStatsd) TimingMs(name string, duration float64, tags map[string]interface{}) error
+
+// MapTag creates a new Field with zero or more items from the contents of an existing map.
+func MapTag(tags map[string]interface{}) Field
+
+// Tag creates a new Field directly from a tag key and value.
+func Tag(key string, value interface{}) Field
+
+// String returns a human-readable representation of the current list of items in the Field.
+func (f Field) String() string
 
 // NewNoopStatsd is a convenience function for creating a NoopStatsd.
 func NewNoopStatsd() *NoopStatsd
