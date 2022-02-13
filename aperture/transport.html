@@ -8,7 +8,8 @@ TYPES
 // Buffered is an abstraction over a Transport that internally buffers the transmission of
 // individual payloads with a configurable batch size.
 type Buffered struct {
-	buf chan []byte
+	buf   chan []byte
+	mutex sync.Mutex
 	Transport
 }
 
