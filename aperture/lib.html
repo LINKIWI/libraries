@@ -3,6 +3,17 @@
 package lib // import &#34;lib.kevinlin.info/aperture/lib&#34;
 
 
+CONSTANTS
+
+const (
+	// DefaultHeartbeatInterval is the default time interval for running heartbeat metric tasks.
+	DefaultHeartbeatInterval = 10 * time.Second
+	// DefaultHeartbeatJitter is the default jitter interval to pause before each invocation of
+	// a heartbeat task.
+	DefaultHeartbeatJitter = 0
+)
+
+
 TYPES
 
 // AsyncStatsd wraps a Statsd implementation to write all metrics asynchronously.
@@ -14,6 +25,16 @@ type AsyncStatsd struct {
 // tags may be derived.
 type Field struct {
 	items []item
+}
+
+// Heartbeat describes a routine task that regularly sends metrics.
+type Heartbeat interface {
+	// Name returns a string identifier for this heartbeat.
+	Name() string
+
+	// Run runs the underlying heartbeat business logic. If an error is returned, the heartbeat
+	// is stopped and no further executions will occur unless the heartbeat is re-registered.
+	Run() error
 }
 
 // NoopStatsd implements the Statsd interface but noops on all APIs.
@@ -50,6 +71,9 @@ FUNCTIONS
 // 	// Build a set of tags inline
 // 	client.Incr(&#34;name&#34;, lib.CombineTags(lib.Tag(&#34;foo&#34;, &#34;bar&#34;)))
 func CombineTags(tags ...Field) map[string]interface{}
+
+// RegisterHeartbeat schedules periodic execution of a new heartbeat task.
+func RegisterHeartbeat(heartbeat Heartbeat, interval time.Duration, jitter time.Duration) chan error
 
 // NewAsyncStatsd creates an AsyncStatsd wrapping an existing Statsd implementation.
 // Note that, due to the asynchronous nature of the client, write errors are not surfaced; all APIs
@@ -88,6 +112,18 @@ func Tag(key string, value interface{}) Field
 
 // String returns a human-readable representation of the current list of items in the Field.
 func (f Field) String() string
+
+// NewResourceUsageHeartbeat creates a new resourceUsageHeartbeat.
+func NewResourceUsageHeartbeat(client aperture.Statsd) Heartbeat
+
+// NewRuntimeStatsHeartbeat creates a new runtimeStatsHeartbeat with a set of default runtime stats.
+func NewRuntimeStatsHeartbeat(client aperture.Statsd) Heartbeat
+
+// NewStatelessHeartbeat creates a new statelessHeartbeat.
+func NewStatelessHeartbeat(name string, run func() error) Heartbeat
+
+// NewUptimeHeartbeat creates a new uptimeHeartbeat.
+func NewUptimeHeartbeat(client aperture.Statsd) Heartbeat
 
 // NewNoopStatsd is a convenience function for creating a NoopStatsd.
 func NewNoopStatsd() *NoopStatsd
