@@ -5,6 +5,15 @@ package transport // import &#34;lib.kevinlin.info/aperture/transport&#34;
 
 TYPES
 
+// Async is an abstraction over a Transport that internally queues transmission of individual
+// payloads for asynchronous delivery by a background flush thread.
+type Async struct {
+	queue  chan []byte
+	closed bool
+	cancel context.CancelFunc
+	Transport
+}
+
 // Buffered is an abstraction over a Transport that internally buffers the transmission of
 // individual payloads with a configurable batch size.
 type Buffered struct {
@@ -96,11 +105,19 @@ type UDS struct {
 
 FUNCTIONS
 
+// Close closes all internal structures, drains any pending payloads, and closes the backing
+// transport.
+func (a *Async) Close() error
+
+// Send asynchronously queues the payload for transmission. Note that this routine will reject sends
+// beyond the allocated queue capacity.
+func (a *Async) Send(data []byte) (int, error)
+
 // Close flushes all remaining queued payloads and closes the backing transport.
 func (t *Buffered) Close() error
 
 // Send asynchronously queues the payload for transmission. If the queue size has reached the batch
-// size, all queued payloads are flushed.
+// size, all queued payloads are synchronously flushed.
 func (t *Buffered) Send(data []byte) (int, error)
 
 // Close attempts to close all underlying transports, accumulating errors for individual failed
@@ -152,6 +169,9 @@ func (t *TCP) Close() error
 // Send initiates a reliable transmission of an arbitrary payload, respecting timeout parameters.
 func (t *TCP) Send(data []byte) (int, error)
 
+// NewAsync creates a new asynchronous transport over an existing Transport backend.
+func NewAsync(backendFactory Factory, size int) (Transport, error)
+
 // NewBuffered creates a new buffered transport over an existing Transport backend.
 func NewBuffered(backendFactory Factory, size int) (Transport, error)
 
@@ -187,7 +207,7 @@ func NewReconnecting(backendFactory Factory, duration time.Duration, threshold i
 // NewUDP creates a UDP transport for a target address.
 func NewUDP(addr string) (Transport, error)
 
-// NewUDS creates a Unix datagram socket transport for a a Unix socket at the target disk path.
+// NewUDS creates a Unix datagram socket transport for a Unix socket at the target disk path.
 func NewUDS(path string) (Transport, error)
 
 // Close closes the underlying UDP socket.
@@ -196,8 +216,8 @@ func (t *UDP) Close() error
 // Send initiates a fire-and-forget transmission of an arbitrary payload.
 func (t *UDP) Send(data []byte) (int, error)
 
-// Close closes the underlying UDP socket.
+// Close closes the underlying Unix datagram socket.
 func (t *UDS) Close() error
 
-// Send initiates a fire-and-forget transmission of an arbitrary payload.
+// Send transmits the payload over the Unix datagram socket.
 func (t *UDS) Send(data []byte) (int, error)</pre></body></html>
